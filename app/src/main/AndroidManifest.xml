@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- PERMISOS -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Athlo"
+        android:enableOnBackInvokedCallback="true"
+        tools:targetApi="tiramisu"
+        tools:ignore="ForegroundServicePermission">
+
+
+        <service
+            android:name=".servicio.EntrenoService"
+            android:foregroundServiceType="location|dataSync"
+            android:exported="false" />
+
+        <service
+            android:name=".servicio.SeguimientoService"
+            android:foregroundServiceType="location"
+            android:exported="false"/>
+
+
+        <!-- (OPCIONAL) Token si usas MapTiler u otro proveedor -->
+        <meta-data
+            android:name="maplibre.accessToken"
+            android:value="Q9rFfJJB0EDEU0CRyJie" />
+
+        <activity
+            android:name="com.example.athlo.MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Athlo">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>
