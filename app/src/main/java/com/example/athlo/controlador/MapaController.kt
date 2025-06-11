@@ -34,6 +34,7 @@ object MapaController {
     private var distanciaActual: Float = 0f
     private var tiempoInicio: Long = 0L
     private var tiempoUltimo: Long = 0L
+    private var tiempoPausaAcumulado: Long = 0L
     private var puntosRuta: MutableList<PuntoRuta> = mutableListOf()
 
     private var mapLibreMap: MapLibreMap? = null
@@ -46,18 +47,30 @@ object MapaController {
         private set
 
     fun iniciarEntreno() {
+        tiempoInicio = System.currentTimeMillis()
+        tiempoUltimo = tiempoInicio
+        tiempoPausaAcumulado = 0L
         estadoEntreno = EstadoEntreno.Activo
     }
 
     fun pausarOReanudarEntreno() {
-        estadoEntreno = if (estadoEntreno == EstadoEntreno.Pausado) {
-            EstadoEntreno.Activo
-        } else {
-            EstadoEntreno.Pausado
+        when (estadoEntreno) {
+            EstadoEntreno.Activo -> {
+                tiempoUltimo = System.currentTimeMillis()
+                estadoEntreno = EstadoEntreno.Pausado
+            }
+            EstadoEntreno.Pausado -> {
+                tiempoPausaAcumulado += System.currentTimeMillis() - tiempoUltimo
+                estadoEntreno = EstadoEntreno.Activo
+            }
+            else -> {}
         }
     }
 
     fun detenerEntreno() {
+        tiempoInicio = 0L
+        tiempoPausaAcumulado = 0L
+        tiempoUltimo = 0L
         estadoEntreno = EstadoEntreno.Detenido
     }
 
@@ -289,8 +302,14 @@ object MapaController {
     }
 
     fun obtenerDuracion(): Long {
-        return if (estadoEntreno == EstadoEntreno.Detenido || tiempoInicio == 0L) 0L
-        else (System.currentTimeMillis() - tiempoInicio) / 1000L
+        if (estadoEntreno == EstadoEntreno.Detenido || tiempoInicio == 0L) return 0L
+
+        val ahora = when (estadoEntreno) {
+            EstadoEntreno.Pausado -> tiempoUltimo
+            else -> System.currentTimeMillis()
+        }
+
+        return ((ahora - tiempoInicio - tiempoPausaAcumulado) / 1000L)
     }
 
     fun obtenerDistanciaRecorrida(): Float = distanciaActual
