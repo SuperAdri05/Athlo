@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 import com.example.athlo.modelo.dao.PuntoRutaDao
 import com.example.athlo.modelo.dao.EjercicioDao
 import com.example.athlo.modelo.dao.EntrenamientoDao
@@ -20,8 +21,9 @@ import com.example.athlo.modelo.mapa.PuntoRuta
         ResumenEntrenoEntity::class,
         ResumenSetEntity::class
     ],
-    version = 14
+    version = 16
 )
+@TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun puntoRutaDao(): PuntoRutaDao
@@ -38,8 +40,9 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "athlo_db"
-                )
+                ).fallbackToDestructiveMigration()
                     .build().also { instancia = it }
+
             }
         }
     }

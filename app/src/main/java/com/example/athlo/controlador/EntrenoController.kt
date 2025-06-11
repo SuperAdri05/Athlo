@@ -2,6 +2,7 @@ package com.example.athlo.controlador
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.util.Log
 import androidx.compose.runtime.MutableState
 import com.example.athlo.modelo.*
 import com.example.athlo.modelo.entidades.EjercicioAsignadoEntity
@@ -15,9 +16,12 @@ import com.example.athlo.modelo.entreno.EntrenoViewModel
 import com.example.athlo.modelo.entreno.ResumenEjercicio
 import com.example.athlo.modelo.entreno.ResumenEntreno
 import com.example.athlo.modelo.entreno.SetData
+import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.firestore
 import kotlinx.coroutines.*
 import kotlinx.coroutines.tasks.await
 import java.util.Date
@@ -320,13 +324,17 @@ object EntrenoController {
     fun guardarResumenEntrenoUsuario(resumen: ResumenEntreno) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid
             ?: throw IllegalStateException("No hay usuario autenticado")
-        firestore
+
+        val resumenRef = firestore
             ?.collection("usuarios")
             ?.document(uid)
             ?.collection("resumenesEntrenos")
             ?.document(resumen.id)
-            ?.set(resumen)
+
+        resumenRef?.set(resumen)
     }
+
+
 
     suspend fun guardarResumenEnLocal(context: Context, resumen: ResumenEntreno) {
         val db = AppDatabase.obtenerInstancia(context)
@@ -358,15 +366,18 @@ object EntrenoController {
     suspend fun obtenerUltimosSetsPorEjercicio(context: Context): Map<String, List<SetData>> {
         init(context)
         val resumenes = db?.entrenamientoDao()?.obtenerResumenes()?.sortedByDescending { it.fecha }
+        Log.d("DEBUG", "Resumenes encontrados: ${resumenes?.size}")
         val mapa = mutableMapOf<String, List<SetData>>()
 
         if (!resumenes.isNullOrEmpty()) {
             val ultimo = resumenes.first()
             val sets = db?.entrenamientoDao()?.obtenerSetsResumen(ultimo.id) ?: emptyList()
-            sets.groupBy { it.nombreEjercicio }.forEach { (nombre, lista) ->
+            Log.d("DEBUG", "Sets encontrados en resumen ${ultimo.id}: ${sets.size}")
+            sets.groupBy { it.nombreEjercicio.lowercase().trim() }.forEach { (nombre, lista) ->
                 mapa[nombre] = lista.map { SetData(it.peso, it.repeticiones) }
             }
         }
+
 
         return mapa
     }
@@ -403,7 +414,42 @@ object EntrenoController {
                 .get()
                 .await()
 
-            snapshot.documents.mapNotNull { it.toObject(ResumenEntreno::class.java) }
+            snapshot.documents.mapNotNull { doc ->
+                try {
+                    val id = doc.getString("id") ?: return@mapNotNull null
+                    val fecha = doc.getDate("fecha") ?: Date()
+                    val duracion = doc.getLong("duracionSec")?.toInt() ?: 0
+                    val calorias = doc.getDouble("calorias")?.toInt() ?: 0
+                    val pesoTotal = doc.getDouble("pesoTotal")?.toFloat() ?: 0f
+                    val entrenamientoId = doc.getString("entrenamientoId") ?: ""
+                    val ejerciciosRaw = doc.get("ejercicios") as? List<Map<String, Any>> ?: emptyList()
+
+                    val ejercicios = ejerciciosRaw.map { ejercicioMap ->
+                        val nombre = ejercicioMap["nombre"] as? String ?: ""
+                        val setsRaw = ejercicioMap["sets"] as? List<Map<String, Any>> ?: emptyList()
+                        val sets = setsRaw.map { set ->
+                            SetData(
+                                peso = (set["peso"] as? Number)?.toFloat() ?: 0f,
+                                repeticiones = (set["repeticiones"] as? Number)?.toInt() ?: 0
+                            )
+                        }
+                        ResumenEjercicio(nombre = nombre, sets = sets)
+                    }
+                    ResumenEntreno(
+                        id = id,
+                        fecha = fecha,
+                        duracionSec = duracion,
+                        calorias = calorias,
+                        pesoTotal = pesoTotal,
+                        entrenamientoId = entrenamientoId,
+                        ejercicios = ejercicios
+                    )
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    null
+                }
+            }
+
 
         } catch (e: Exception) {
             // 🔁 Fallback local con Room
@@ -424,12 +470,56 @@ object EntrenoController {
                     duracionSec = resumen.duracionSec,
                     calorias = resumen.calorias,
                     pesoTotal = resumen.pesoTotal,
+                    entrenamientoId = "",
                     ejercicios = ejercicios
                 )
             }
         }
     }
 
+    suspend fun obtenerNombreDeEntrenamiento(entrenamientoId: String): String {
+        return try {
+            val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return "Entrenamiento"
+            val doc = FirebaseFirestore.getInstance()
+                .collection("usuarios")
+                .document(uid)
+                .collection("entrenamientos")
+                .document(entrenamientoId)
+                .get()
+                .await()
 
+            doc.getString("nombre") ?: "Entrenamiento"
+        } catch (e: Exception) {
+            "Entrenamiento"
+        }
+    }
+
+    suspend fun obtenerUltimosSetsDesdeFirestore(entrenamientoId: String): Map<String, List<SetData>> {
+        val resumenesRef = Firebase.firestore
+            .collection("usuarios")
+            .document(FirebaseAuth.getInstance().currentUser?.uid ?: return emptyMap())
+            .collection("resumenesEntrenos")
+            .whereEqualTo("entrenamientoId", entrenamientoId)
+            .orderBy("fecha", Query.Direction.DESCENDING)
+            .limit(1)
+
+        val snapshot = resumenesRef.get().await()
+        val resumen = snapshot.documents.firstOrNull() ?: return emptyMap()
+
+        val ejercicios = resumen.get("ejercicios") as? List<Map<String, Any>> ?: return emptyMap()
+
+        val resultado = mutableMapOf<String, List<SetData>>()
+        for (ej in ejercicios) {
+            val nombre = (ej["nombre"] as? String)?.lowercase()?.trim() ?: continue
+            val sets = (ej["sets"] as? List<Map<String, Any>>)?.mapNotNull {
+                val peso = (it["peso"] as? Number)?.toFloat() ?: return@mapNotNull null
+                val reps = (it["repeticiones"] as? Number)?.toInt() ?: return@mapNotNull null
+                SetData(peso, reps)
+            } ?: continue
+            resultado[nombre] = sets
+        }
+
+        return resultado
+    }
 
 }

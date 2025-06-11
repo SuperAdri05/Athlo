@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -11,6 +12,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -58,9 +61,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
@@ -74,6 +80,8 @@ import com.google.accompanist.swiperefresh.SwipeRefresh
 import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -84,14 +92,11 @@ fun PantallaDetalleEntreno(
     onIniciar: () -> Unit,
     onAgregarEjercicios: () -> Unit,
 ) {
-
-
     val context = LocalContext.current
 
     BackHandler {
         navController.popBackStack("entreno", inclusive = false)
     }
-
 
     // --- Estados principales ---
     val seleccionado = viewModel.entrenamientoSeleccionado
@@ -191,7 +196,48 @@ fun PantallaDetalleEntreno(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("💪 ${entrenamiento.nombre}", fontSize = 24.sp) },
+                title = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("💪 ${entrenamiento.nombre}", fontSize = 20.sp)
+
+                        IconButton(
+                            onClick = {
+                                when {
+                                    enCurso != null && enCurso.id == entrenamiento.id -> {
+                                        viewModel.estaMinimizado = false
+                                        onIniciar()
+                                    }
+
+                                    enCurso != null && enCurso.id != entrenamiento.id -> {
+                                        mostrarDialogoInterrupcion.value = entrenamiento
+                                    }
+
+                                    else -> {
+                                        viewModel.entrenamientoSeleccionado = entrenamiento
+                                        viewModel.entrenamientoEnCurso = entrenamiento
+                                        viewModel.tiempoAcumulado = 0
+                                        viewModel.estaMinimizado = false
+                                        onIniciar()
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(MaterialTheme.colorScheme.primary, CircleShape)
+                                .clip(CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Iniciar entreno",
+                                tint = Color.White
+                            )
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onVolver) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
@@ -199,6 +245,7 @@ fun PantallaDetalleEntreno(
                 }
             )
         }
+
     ) { inner ->
         Box(
             Modifier
@@ -226,53 +273,40 @@ fun PantallaDetalleEntreno(
                         modifier = Modifier.fillMaxSize()
                     ) {
                         // Datos generales
-                        Text(
-                            "Nivel: ${entrenamiento.nivel}",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            "Duración: ${entrenamiento.duracionMin} min",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text("Descripción: ${entrenamiento.descripcion}")
+                        var datosProgreso by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
 
-                        Spacer(Modifier.height(16.dp))
-
-                        // Botón central de iniciar entreno
-                        Box(
-                            modifier = Modifier
-                                .size(100.dp)
-                                .shadow(8.dp, shape = CircleShape)
-                                .background(MaterialTheme.colorScheme.primary, shape = CircleShape)
-                                .clickable {
-                                    when {
-                                        enCurso != null && enCurso.id == entrenamiento.id -> {
-                                            viewModel.estaMinimizado = false
-                                            onIniciar()
-                                        }
-
-                                        enCurso != null && enCurso.id != entrenamiento.id -> {
-                                            mostrarDialogoInterrupcion.value = entrenamiento
-                                        }
-
-                                        else -> {
-                                            viewModel.entrenamientoSeleccionado = entrenamiento
-                                            viewModel.entrenamientoEnCurso = entrenamiento
-                                            viewModel.tiempoAcumulado = 0
-                                            viewModel.estaMinimizado = false
-                                            onIniciar()
-                                        }
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = "Iniciar entreno",
-                                tint = Color.White,
-                                modifier = Modifier.size(48.dp)
-                            )
+                        LaunchedEffect(viewModel.entrenamientoSeleccionado?.id) {
+                            val resumenes = EntrenoController.obtenerTodosLosResumenes(context)
+                            val formato = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                            val idActual = viewModel.entrenamientoSeleccionado?.id
+                            datosProgreso = resumenes
+                                .filter { it.entrenamientoId == idActual }
+                                .map {
+                                    val fecha = formato.format(it.fecha)
+                                    fecha to it.pesoTotal.toInt()
+                                }
+                                .sortedWith(compareBy({ it.first.substring(0, 10) }, { it.first.substring(11) }))
                         }
+
+                        if (datosProgreso.isEmpty()) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Text("❗ No se ha registrado aún ningún entreno.", style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                        } else {
+                            GraficoProgresoPeso(datos = datosProgreso, alturaMaxima = 150.dp)
+                        }
+
                         Spacer(Modifier.height(16.dp))
                         Text("Ejercicios", style = MaterialTheme.typography.titleLarge)
                         errorMsg?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -292,9 +326,7 @@ fun PantallaDetalleEntreno(
                             items(ejercicios, key = { it.id }) { ejercicio ->
                                 var expanded by remember { mutableStateOf(false) }
 
-                                // Cada ejercicio en un Box para superponer los botones
                                 Box(Modifier.fillMaxWidth()) {
-                                    // Tarjeta clicable / long-press
                                     Card(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -313,22 +345,30 @@ fun PantallaDetalleEntreno(
                                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                                     ) {
                                         Column(Modifier.padding(16.dp)) {
-                                            // Fila principal
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                                 modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                AsyncImage(
-                                                    model = ejercicio.foto,
-                                                    contentDescription = null,
+                                                Box(
                                                     modifier = Modifier
                                                         .size(64.dp)
-                                                        .background(
-                                                            MaterialTheme.colorScheme.surface,
-                                                            CircleShape
-                                                        )
-                                                )
+                                                        .shadow(6.dp, CircleShape, clip = false)
+                                                        .clip(CircleShape)
+                                                        .background(MaterialTheme.colorScheme.surface)
+                                                        .clickable {
+                                                            navController.navigate("info_ejercicio/${ejercicio.idEjercicioFirestore}")
+                                                        },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    AsyncImage(
+                                                        model = ejercicio.foto,
+                                                        contentDescription = null,
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .clip(CircleShape)
+                                                    )
+                                                }
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Text(
                                                         ejercicio.nombre,
@@ -341,75 +381,61 @@ fun PantallaDetalleEntreno(
                                                 )
                                             }
 
-                                            // Detalle desplegable
                                             if (expanded) {
                                                 Spacer(Modifier.height(8.dp))
                                                 Text("Series: ${ejercicio.series} · Reps: ${ejercicio.repeticiones} · Peso: ${ejercicio.peso} kg")
                                                 Spacer(Modifier.height(4.dp))
                                                 TextButton(onClick = {
-                                                    val intent = Intent(
-                                                        Intent.ACTION_VIEW,
-                                                        Uri.parse(ejercicio.video)
-                                                    )
-                                                    context.startActivity(intent)
+                                                    navController.navigate("info_ejercicio/${ejercicio.idEjercicioFirestore}")
                                                 }) {
                                                     Text(
-                                                        "▶️ Ver video",
+                                                        "ℹ️ Ver información",
                                                         color = MaterialTheme.colorScheme.primary
                                                     )
                                                 }
+
                                             }
                                         }
                                     }
 
-                                    // Botones flotantes de Editar / Borrar
-                                    androidx.compose.animation.AnimatedVisibility(
-                                        visible = mostrarAccionesId == ejercicio.id && enCurso == null,
-                                        enter = fadeIn(),
-                                        exit = fadeOut(),
+                                    Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .wrapContentSize(Alignment.TopEnd)
                                     ) {
-                                        Column(
-                                            horizontalAlignment = Alignment.End,
-                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        androidx.compose.animation.AnimatedVisibility(
+                                            visible = mostrarAccionesId == ejercicio.id && enCurso == null,
+                                            enter = fadeIn(),
+                                            exit = fadeOut()
                                         ) {
-                                            // Editar
-                                            IconButton(onClick = {
-                                                if (enCurso == null) {
-                                                    ejercicioEditando = ejercicio
+                                            Column(
+                                                horizontalAlignment = Alignment.End,
+                                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                IconButton(onClick = {
+                                                    if (enCurso == null) {
+                                                        ejercicioEditando = ejercicio
+                                                    }
+                                                    mostrarAccionesId = null
+                                                }) {
+                                                    Icon(Icons.Default.Edit, contentDescription = "Editar ejercicio")
                                                 }
-                                                mostrarAccionesId = null
-                                            }) {
-                                                Icon(
-                                                    Icons.Default.Edit,
-                                                    contentDescription = "Editar ejercicio"
-                                                )
-                                            }
-                                            // Borrar (solo si queda >1)
-                                            IconButton(onClick = {
-                                                if (enCurso == null && ejercicios.size > 1) {
-                                                    ejercicioParaEliminar = ejercicio
-                                                } else if (ejercicios.size <= 1) {
-                                                    Toast.makeText(
-                                                        context,
-                                                        "Debe quedar al menos 1 ejercicio",
-                                                        Toast.LENGTH_SHORT
-                                                    ).show()
-                                                }
-                                                mostrarAccionesId = null
-                                            }) {
-                                                Icon(
-                                                    Icons.Default.Delete,
-                                                    contentDescription = "Borrar ejercicio",
-                                                    tint = if (ejercicios.size > 1)
-                                                        MaterialTheme.colorScheme.error
-                                                    else
-                                                        Color.Gray
-                                                )
-                                            }
 
+                                                IconButton(onClick = {
+                                                    if (enCurso == null && ejercicios.size > 1) {
+                                                        ejercicioParaEliminar = ejercicio
+                                                    } else if (ejercicios.size <= 1) {
+                                                        Toast.makeText(context, "Debe quedar al menos 1 ejercicio", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                    mostrarAccionesId = null
+                                                }) {
+                                                    Icon(
+                                                        Icons.Default.Delete,
+                                                        contentDescription = "Borrar ejercicio",
+                                                        tint = if (ejercicios.size > 1) MaterialTheme.colorScheme.error else Color.Gray
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -597,6 +623,93 @@ fun PantallaDetalleEntreno(
                     navController = navController,
                     mostrarDialogo = mostrarDialogoInterrupcion
                 )
+            }
+        }
+    }
+
+}
+
+@Composable
+fun GraficoProgresoPeso(
+    datos: List<Pair<String, Int>>,
+    alturaMaxima: Dp = 150.dp,
+    modifier: Modifier = Modifier
+) {
+    var seleccionado by remember { mutableStateOf<Pair<String, Int>?>(null) }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { seleccionado = null })
+            }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = MaterialTheme.shapes.medium
+                )
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "Progreso de peso total levantado",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            val maxPeso = datos.maxOfOrNull { it.second }?.coerceAtLeast(1)
+
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.Bottom,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { seleccionado = null })
+                    }
+            ) {
+                items(datos) { (fecha, peso) ->
+                    val alturaRelativa = (peso.toFloat() / maxPeso!!)
+                    val alturaBarra = (alturaRelativa * alturaMaxima.value).coerceAtLeast(16f)
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            modifier = Modifier
+                                .height(alturaBarra.dp)
+                                .width(32.dp)
+                                .clip(MaterialTheme.shapes.small)
+                                .background(
+                                    if (seleccionado?.first == fecha)
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                )
+                                .clickable { seleccionado = fecha to peso },
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(text = fecha.substring(5, 10), fontSize = 12.sp)
+                    }
+                }
+            }
+
+            AnimatedVisibility(visible = seleccionado != null) {
+                seleccionado?.let { (fecha, peso) ->
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("📅 Fecha: $fecha")
+                            Text("🏋️ Peso total: $peso kg")
+                        }
+                    }
+                }
             }
         }
     }

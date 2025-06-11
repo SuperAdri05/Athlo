@@ -32,16 +32,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.example.athlo.controlador.EntrenoController
-import com.example.athlo.modelo.AppDatabase
 import com.example.athlo.modelo.entreno.EntrenoViewModel
-import com.example.athlo.modelo.entreno.ResumenEjercicio
+import com.example.athlo.modelo.entreno.ResumenConNombre
 import com.example.athlo.modelo.entreno.ResumenEntreno
-import com.example.athlo.modelo.entreno.SetData
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
-import java.util.Date
 
 @SuppressLint("SimpleDateFormat")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,15 +47,32 @@ fun HistorialResumenesEntreno(
     viewModel: EntrenoViewModel
 ) {
     val context = LocalContext.current
-    var listaResumenes by remember { mutableStateOf<List<ResumenEntreno>>(emptyList()) }
+    var listaResumenes by remember { mutableStateOf<List<ResumenConNombre>>(emptyList()) }
     var cargando by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
         cargando = true
-        listaResumenes = EntrenoController.obtenerTodosLosResumenes(context)
-            .sortedByDescending { it.fecha }
+        val resumenes = EntrenoController.obtenerTodosLosResumenes(context)
+        val entrenamientosLocales = EntrenoController.obtenerEntrenamientos()
+
+        val lista = withContext(Dispatchers.IO) {
+            resumenes.map { resumen ->
+                // Log de depuración
+                println("🧪 Buscando nombre para entrenamientoId: ${resumen.entrenamientoId}")
+
+                val nombreLocal = entrenamientosLocales.find { it.id == resumen.entrenamientoId }?.nombre
+                val nombreFinal = nombreLocal ?: EntrenoController.obtenerNombreDeEntrenamiento(resumen.entrenamientoId)
+
+                println("✅ Resultado: $nombreFinal")
+
+                ResumenConNombre(resumen, nombreFinal)
+            }.sortedByDescending { it.resumen.fecha }
+        }
+
+        listaResumenes = lista
         cargando = false
     }
+
 
     Scaffold(
         topBar = {
@@ -94,7 +107,10 @@ fun HistorialResumenesEntreno(
 
                 else -> {
                     LazyColumn(modifier = Modifier.padding(16.dp)) {
-                        items(listaResumenes) { resumen ->
+                        items(listaResumenes) { item ->
+                            val resumen = item.resumen
+                            val nombre = item.nombreEntreno
+
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -107,6 +123,10 @@ fun HistorialResumenesEntreno(
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Text(
+                                        text = "🏋️ $nombre",
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Text(
                                         text = "🗓 ${SimpleDateFormat("dd/MM/yyyy").format(resumen.fecha)}",
                                         style = MaterialTheme.typography.titleMedium
                                     )
@@ -117,10 +137,10 @@ fun HistorialResumenesEntreno(
                                 }
                             }
                         }
+
                     }
                 }
             }
         }
-
     }
 }

@@ -3,11 +3,14 @@ package com.example.athlo.vista
 // Imports necesarios para navegación, UI y modelo
 import android.content.Intent
 import android.content.SharedPreferences
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -22,6 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -168,6 +172,7 @@ fun PantallaPrincipal() {
                 }
                 composable("pantalla_ejecutar_entreno") {
                     PantallaEjecutarEntreno(
+                        navController = navController,
                         viewModel = entrenoViewModel,
                         onVolver = { navController.popBackStack("entreno", inclusive = false) },
                         onIrResumen = { resumen ->
@@ -225,7 +230,6 @@ fun PantallaPrincipal() {
                         mutableStateOf<EjercicioDisponible?>(null)
                     }
 
-                    // Cargar desde Room (o Firestore si prefieres)
                     LaunchedEffect(ejercicioId) {
                         if (!ejercicioId.isNullOrBlank()) {
                             val dao = AppDatabase.obtenerInstancia(context).ejercicioDao()
@@ -236,10 +240,11 @@ fun PantallaPrincipal() {
                     if (ejercicio.value != null) {
                         PantallaInformacionEjercicio(ejercicio = ejercicio.value!!, navController = navController)
                     } else {
-                        Text("Cargando información del ejercicio…")
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
                     }
                 }
-
 
 
 

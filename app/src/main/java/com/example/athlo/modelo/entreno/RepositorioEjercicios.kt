@@ -20,7 +20,7 @@ class RepositorioEjercicios(private val context: Context) {
                 val id = doc.id
                 val nombre = doc.getString("nombre") ?: return@mapNotNull null
                 val musculo = doc.getString("musculo") ?: ""
-                val descripcion = doc.getString("descripcion") ?: ""
+                val descripcion = doc.get("descripcion") as? List<String> ?: emptyList()
                 val foto = doc.getString("foto") ?: ""
                 val video = doc.getString("video") ?: ""
 

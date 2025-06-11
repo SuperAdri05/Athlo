@@ -8,7 +8,7 @@ data class EjercicioDisponible(
     @PrimaryKey val id: String,
     val nombre: String,
     val musculo: String,
-    val descripcion: String,
+    val descripcion: List<String>,
     val foto: String,
     val video: String
 )

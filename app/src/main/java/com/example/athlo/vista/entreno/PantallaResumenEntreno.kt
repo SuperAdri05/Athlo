@@ -56,7 +56,6 @@ fun PantallaResumenEntreno(
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-
     Scaffold(
         topBar = {
             TopAppBar(

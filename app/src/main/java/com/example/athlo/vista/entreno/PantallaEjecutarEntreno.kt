@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
@@ -35,6 +36,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +65,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.navigation.NavHostController
 import coil.compose.rememberAsyncImagePainter
 import com.example.athlo.controlador.EntrenoController
 import com.example.athlo.modelo.entreno.EntrenoViewModel
@@ -79,10 +82,11 @@ import kotlinx.coroutines.launch
 @SuppressLint("ContextCastToActivity")
 @Composable
 fun PantallaEjecutarEntreno(
+    navController: NavHostController,
     viewModel: EntrenoViewModel,
     onVolver: () -> Unit,
-    onIrResumen: (ResumenEntreno) -> Unit)
-{
+    onIrResumen: (ResumenEntreno) -> Unit,
+) {
     val entrenamientoEnCurso = viewModel.entrenamientoEnCurso
 
     // Si no hay entrenamiento, lanza la navegación hacia atrás
@@ -103,6 +107,7 @@ fun PantallaEjecutarEntreno(
 
     var entrenamiento by remember { mutableStateOf(entrenamientoEnCurso) }
     val scope = rememberCoroutineScope()
+    var cargandoEjercicios by remember { mutableStateOf(true) }
 
     val context = LocalContext.current
     var debeGuardarEstado by remember { mutableStateOf(true) }
@@ -122,28 +127,6 @@ fun PantallaEjecutarEntreno(
     val completadas = viewModel.completadas
 
     var showDialogBack by remember { mutableStateOf(false) }
-
-    // Carga ejercicios
-    LaunchedEffect(entrenamiento.id) {
-        EntrenoController.init(context)
-        val ejerciciosRemote = EntrenoController.obtenerEjerciciosDeEntrenoDesdeFirestore(entrenamiento.id)
-        if (ejerciciosRemote.isNotEmpty()) {
-            entrenamiento = entrenamiento.copy(ejercicios = ejerciciosRemote.map { it.toDomain() })
-        }
-
-        // Carga sets anteriores
-        val anterioresCargados = EntrenoController.obtenerUltimosSetsPorEjercicio(context)
-        anterioresPorEjercicio.clear()
-        anterioresPorEjercicio.putAll(anterioresCargados)
-
-        // También guarda visualmente los anteriores que ya encajen por índice
-        entrenamiento.ejercicios.forEach { ej ->
-            val sets = anterioresCargados[ej.nombre] ?: return@forEach
-            sets.forEachIndexed { idx, set ->
-                viewModel.anteriores[ej.nombre to idx] = "${set.peso}x${set.repeticiones}"
-            }
-        }
-    }
 
     // Cronómetro
     LaunchedEffect(Unit) {
@@ -190,7 +173,10 @@ fun PantallaEjecutarEntreno(
                 Log.d("DISPOSE", "Guardando estado entreno antes de salir")
                 guardarEstadoCompleto(context, viewModel)
             } else {
-                Log.d("DISPOSE", "No se guarda, debeGuardarEstado=$debeGuardarEstado, isMinimized=$isMinimized")
+                Log.d(
+                    "DISPOSE",
+                    "No se guarda, debeGuardarEstado=$debeGuardarEstado, isMinimized=$isMinimized"
+                )
             }
         }
 
@@ -212,6 +198,39 @@ fun PantallaEjecutarEntreno(
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
+
+    // Carga ejercicios
+    LaunchedEffect(entrenamiento.id) {
+        cargandoEjercicios = true
+        EntrenoController.init(context)
+
+        // Cargar ejercicios desde Firestore
+        val ejerciciosRemote = EntrenoController.obtenerEjerciciosDeEntrenoDesdeFirestore(entrenamiento.id)
+        if (ejerciciosRemote.isNotEmpty()) {
+            entrenamiento = entrenamiento.copy(ejercicios = ejerciciosRemote.map { it.toDomain() })
+        }
+
+        // 🔁 Intentar primero obtener sets anteriores desde Firestore
+        val anterioresFirestore = EntrenoController.obtenerUltimosSetsDesdeFirestore(entrenamiento.id)
+
+        val anterioresCargados = if (anterioresFirestore.isNotEmpty()) {
+            Log.d("ANTERIOR", "Usando datos anteriores desde Firestore")
+            anterioresFirestore
+        } else {
+            Log.d("ANTERIOR", "No hay datos en Firestore, usando Room")
+            EntrenoController.obtenerUltimosSetsPorEjercicio(context)
+        }
+
+        anterioresCargados.forEach { (nombreEjercicio, listaSets) ->
+            listaSets.forEachIndexed { idx, set ->
+                val clave = nombreEjercicio.lowercase().trim() to idx
+                viewModel.anteriores[clave] = "${set.peso}x${set.repeticiones}"
+            }
+        }
+
+        cargandoEjercicios = false
+    }
+
 
 
     Scaffold(
@@ -281,243 +300,343 @@ fun PantallaEjecutarEntreno(
         Box(Modifier.fillMaxSize()) {
             // Contenido principal
             if (!isMinimized) {
-                Column(
-                    Modifier
-                        .padding(inner)
-                        .fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    LazyColumn(
-                        Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                if (cargandoEjercicios) {
+                    // Indicador de carga mientras se descargan ejercicios
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    }
+                } else {
+                    Column(
+                        Modifier
+                            .padding(inner)
+                            .fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(entrenamiento.ejercicios, key = { it.id }) { ejercicio ->
-                            var expanded by remember { mutableStateOf(false) }
-                            Card(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .animateContentSize()
-                                    .clickable { expanded = !expanded },
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                                )
-                            ) {
-                                Column(Modifier.padding(0.dp)) {
-                                    // Cabecera con fondo azul y foto
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .background(MaterialTheme.colorScheme.primary)
-                                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        // Imagen
-                                        if (ejercicio.foto.isNotBlank()) {
-                                            androidx.compose.foundation.Image(
-                                                painter = rememberAsyncImagePainter(ejercicio.foto),
-                                                contentDescription = "Foto ejercicio",
-                                                modifier = Modifier
-                                                    .size(40.dp)
-                                                    .clip(CircleShape)
-                                            )
-                                        }
-
-                                        // Título y expansión
+                        LazyColumn(
+                            Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(entrenamiento.ejercicios, key = { it.id }) { ejercicio ->
+                                var expanded by remember { mutableStateOf(false) }
+                                Card(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .animateContentSize()
+                                        .clickable { expanded = !expanded },
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                ) {
+                                    Column(Modifier.padding(0.dp)) {
+                                        // Cabecera con fondo azul y foto
                                         Row(
-                                            modifier = Modifier.weight(1f),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(MaterialTheme.colorScheme.primary)
+                                                .padding(horizontal = 16.dp, vertical = 12.dp),
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                                         ) {
-                                            Text(
-                                                text = ejercicio.nombre,
-                                                style = MaterialTheme.typography.titleMedium.copy(
-                                                    color = MaterialTheme.colorScheme.onPrimary,
-                                                    fontSize = 18.sp
-                                                )
-                                            )
-                                            Icon(
-                                                imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onPrimary
-                                            )
-                                        }
-                                    }
-
-
-                                    if (expanded) {
-                                        Column {
-                                            val screenWidth = LocalContext.current.resources.displayMetrics.widthPixels / LocalContext.current.resources.displayMetrics.density
-                                            val colWidth = screenWidth / 5  // 5 columnas: SERIE, ANTERIOR, KG, REPS, CHECK
-                                            // Cabecera
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(vertical = 6.dp),
-                                                verticalAlignment = Alignment.CenterVertically
+                                            // Imagen
+                                            Surface(
+                                                shape = CircleShape,
+                                                shadowElevation = 4.dp,
+                                                color = Color.White,
+                                                modifier = Modifier.size(70.dp)
                                             ) {
-                                                Box(Modifier.width(colWidth.dp), contentAlignment = Alignment.Center) {
-                                                    Text("SERIE", style = MaterialTheme.typography.labelSmall)
-                                                }
-                                                Box(Modifier.width(colWidth.dp), contentAlignment = Alignment.Center) {
-                                                    Text("ANTERIOR", style = MaterialTheme.typography.labelSmall)
-                                                }
-                                                Box(Modifier.width(colWidth.dp), contentAlignment = Alignment.Center) {
-                                                    Text("KG", style = MaterialTheme.typography.labelSmall)
-                                                }
-                                                Box(Modifier.width(colWidth.dp), contentAlignment = Alignment.Center) {
-                                                    Text("REPS", style = MaterialTheme.typography.labelSmall)
-                                                }
-                                                Box(Modifier.width(colWidth.dp), contentAlignment = Alignment.Center) {
-                                                    // Tick
+                                                androidx.compose.foundation.Image(
+                                                    painter = rememberAsyncImagePainter(ejercicio.foto),
+                                                    contentDescription = "Foto ejercicio",
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .padding(4.dp)
+                                                        .clip(CircleShape)
+                                                )
+                                            }
+
+                                            // Título y expansión
+                                            Row(
+                                                modifier = Modifier.weight(1f),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(
+                                                    text = ejercicio.nombre,
+                                                    style = MaterialTheme.typography.titleMedium.copy(
+                                                        color = MaterialTheme.colorScheme.onPrimary,
+                                                        fontSize = 18.sp
+                                                    )
+                                                )
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    IconButton(
+                                                        onClick = {
+                                                            navController.navigate("info_ejercicio/${ejercicio.idEjercicioFirestore}")
+                                                        }
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Info,
+                                                            contentDescription = "Info del ejercicio",
+                                                            tint = MaterialTheme.colorScheme.onPrimary
+                                                        )
+                                                    }
+                                                    Icon(
+                                                        imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                                        contentDescription = "Expandir ejercicio",
+                                                        tint = MaterialTheme.colorScheme.onPrimary
+                                                    )
                                                 }
                                             }
 
+                                        }
 
-                                            val id = ejercicio.id
-                                            val seriesTotales = viewModel.seriesPorEjercicio.getOrPut(id) { ejercicio.series }
 
-                                            repeat(seriesTotales) { idx ->
-
-                                            val key = ejercicio.nombre to idx
-                                                val anterior = anteriores[key] ?: "-"
-
-                                                val (pesoEsp, repsEsp) = esperados.getOrPut(key) {
-                                                    ejercicio.peso.toString() to ejercicio.repeticiones.toString()
-                                                }
-                                                val (pesoReal, repsReal) = hechos.getOrPut(key) { "" to "" }
-                                                val completado = completadas.getOrPut(key) { false }
-
+                                        if (expanded) {
+                                            Column {
+                                                val screenWidth =
+                                                    LocalContext.current.resources.displayMetrics.widthPixels / LocalContext.current.resources.displayMetrics.density
+                                                val colWidth =
+                                                    screenWidth / 5  // 5 columnas: SERIE, ANTERIOR, KG, REPS, CHECK
+                                                // Cabecera
                                                 Row(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
-                                                        .padding(vertical = 8.dp)
-                                                        .background(if (completado) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent),
+                                                        .padding(vertical = 6.dp),
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
-                                                    // SERIE
-                                                    Box(Modifier.width(colWidth.dp), contentAlignment = Alignment.Center) {
-                                                        Text("${idx + 1}")
-                                                    }
-
-                                                    // ANTERIOR
-                                                    Box(Modifier.width(colWidth.dp), contentAlignment = Alignment.Center) {
-                                                        Text(anterior, color = Color.Gray)
-                                                    }
-
-                                                    // KG
                                                     Box(
-                                                        modifier = Modifier
-                                                            .width(colWidth.dp)
-                                                            .height(40.dp),
+                                                        Modifier.width(colWidth.dp),
                                                         contentAlignment = Alignment.Center
                                                     ) {
-                                                        BasicTextField(
-                                                            value = pesoReal,
-                                                            onValueChange = {
-                                                                val filtered = it.filter { char -> char.isDigit() }.take(4)
-                                                                hechos[key] = filtered to repsReal
-                                                            },
-                                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                                            singleLine = true,
-                                                            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                                                color = MaterialTheme.colorScheme.onSurface,
-                                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                                            ),
-                                                            decorationBox = { innerTextField ->
-                                                                Box(
-                                                                    modifier = Modifier
-                                                                        .fillMaxSize()
-                                                                        .padding(horizontal = 4.dp),
-                                                                    contentAlignment = Alignment.Center
-                                                                ) {
-                                                                    if (pesoReal.isBlank()) {
-                                                                        Text(
-                                                                            text = pesoEsp,
-                                                                            color = Color.Gray,
-                                                                            style = MaterialTheme.typography.bodyMedium.copy(
-                                                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                                                            )
-                                                                        )
-                                                                    }
-                                                                    innerTextField()
-                                                                }
-                                                            }
+                                                        Text(
+                                                            "SERIE",
+                                                            style = MaterialTheme.typography.labelSmall
                                                         )
                                                     }
-
-                                                    // REPS
                                                     Box(
-                                                        modifier = Modifier
-                                                            .width(colWidth.dp)
-                                                            .height(40.dp),
+                                                        Modifier.width(colWidth.dp),
                                                         contentAlignment = Alignment.Center
                                                     ) {
-                                                        BasicTextField(
-                                                            value = repsReal,
-                                                            onValueChange = {
-                                                                val filtered = it.filter { char -> char.isDigit() }.take(4)
-                                                                hechos[key] = pesoReal to filtered
-                                                            },
-                                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                                            singleLine = true,
-                                                            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                                                color = MaterialTheme.colorScheme.onSurface,
-                                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                                            ),
-                                                            decorationBox = { innerTextField ->
-                                                                Box(
-                                                                    modifier = Modifier
-                                                                        .fillMaxSize()
-                                                                        .padding(horizontal = 4.dp),
-                                                                    contentAlignment = Alignment.Center
-                                                                ) {
-                                                                    if (repsReal.isBlank()) {
-                                                                        Text(
-                                                                            text = repsEsp,
-                                                                            color = Color.Gray,
-                                                                            style = MaterialTheme.typography.bodyMedium.copy(
-                                                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                                                            )
-                                                                        )
-                                                                    }
-                                                                    innerTextField()
-                                                                }
-                                                            }
+                                                        Text(
+                                                            "ANTERIOR",
+                                                            style = MaterialTheme.typography.labelSmall
                                                         )
                                                     }
+                                                    Box(
+                                                        Modifier.width(colWidth.dp),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(
+                                                            "KG",
+                                                            style = MaterialTheme.typography.labelSmall
+                                                        )
+                                                    }
+                                                    Box(
+                                                        Modifier.width(colWidth.dp),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(
+                                                            "REPS",
+                                                            style = MaterialTheme.typography.labelSmall
+                                                        )
+                                                    }
+                                                    Box(
+                                                        Modifier.width(colWidth.dp),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        // Tick
+                                                    }
+                                                }
 
 
-                                                    // CHECK
-                                                    Box(Modifier.width(colWidth.dp), contentAlignment = Alignment.Center) {
-                                                        IconButton(onClick = { completadas[key] = !completado }) {
-                                                            Icon(
-                                                                imageVector = Icons.Filled.Check,
-                                                                contentDescription = "Completado",
-                                                                tint = if (completado) MaterialTheme.colorScheme.primary else Color.Gray
+                                                val id = ejercicio.id
+                                                val seriesTotales =
+                                                    viewModel.seriesPorEjercicio.getOrPut(id) { ejercicio.series }
+
+                                                repeat(seriesTotales) { idx ->
+
+                                                    val claveNombre = ejercicio.nombre.lowercase().trim()
+                                                    val key = claveNombre to idx
+                                                    val anterior = anteriores[key] ?: "-"
+
+
+                                                    val (pesoEsp, repsEsp) = esperados.getOrPut(key) {
+                                                        ejercicio.peso.toString() to ejercicio.repeticiones.toString()
+                                                    }
+                                                    val (pesoReal, repsReal) = hechos.getOrPut(key) { "" to "" }
+                                                    val completado =
+                                                        completadas.getOrPut(key) { false }
+
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(vertical = 8.dp)
+                                                            .background(
+                                                                if (completado) MaterialTheme.colorScheme.primary.copy(
+                                                                    alpha = 0.1f
+                                                                ) else Color.Transparent
+                                                            ),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        // SERIE
+                                                        Box(
+                                                            Modifier.width(colWidth.dp),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Text("${idx + 1}")
+                                                        }
+
+                                                        // ANTERIOR
+                                                        Box(
+                                                            Modifier.width(colWidth.dp),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Text(anterior, color = Color.Gray)
+                                                        }
+
+                                                        // KG
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .width(colWidth.dp)
+                                                                .height(40.dp),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            BasicTextField(
+                                                                value = pesoReal,
+                                                                onValueChange = { input ->
+                                                                    // Permitir solo números, coma y máximo dos decimales
+                                                                    val regex =
+                                                                        Regex("^\\d{0,3}(,\\d{0,2})?$")
+                                                                    if (regex.matches(input)) {
+                                                                        hechos[key] =
+                                                                            input to repsReal
+                                                                    }
+                                                                },
+                                                                keyboardOptions = KeyboardOptions(
+                                                                    keyboardType = KeyboardType.Number
+                                                                ),
+                                                                singleLine = true,
+                                                                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                                                ),
+                                                                decorationBox = { innerTextField ->
+                                                                    Box(
+                                                                        modifier = Modifier
+                                                                            .fillMaxSize()
+                                                                            .padding(horizontal = 4.dp),
+                                                                        contentAlignment = Alignment.Center
+                                                                    ) {
+                                                                        if (pesoReal.isBlank()) {
+                                                                            Text(
+                                                                                text = pesoEsp,
+                                                                                color = Color.Gray,
+                                                                                style = MaterialTheme.typography.bodyMedium.copy(
+                                                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                                                                )
+                                                                            )
+                                                                        }
+                                                                        innerTextField()
+                                                                    }
+                                                                }
                                                             )
+
+                                                        }
+
+                                                        // REPS
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .width(colWidth.dp)
+                                                                .height(40.dp),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            BasicTextField(
+                                                                value = repsReal,
+                                                                onValueChange = {
+                                                                    val filtered =
+                                                                        it.filter { char -> char.isDigit() }
+                                                                            .take(2)
+                                                                    hechos[key] =
+                                                                        pesoReal to filtered
+                                                                },
+                                                                keyboardOptions = KeyboardOptions(
+                                                                    keyboardType = KeyboardType.Number
+                                                                ),
+                                                                singleLine = true,
+                                                                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                                                ),
+                                                                decorationBox = { innerTextField ->
+                                                                    Box(
+                                                                        modifier = Modifier
+                                                                            .fillMaxSize()
+                                                                            .padding(horizontal = 4.dp),
+                                                                        contentAlignment = Alignment.Center
+                                                                    ) {
+                                                                        if (repsReal.isBlank()) {
+                                                                            Text(
+                                                                                text = repsEsp,
+                                                                                color = Color.Gray,
+                                                                                style = MaterialTheme.typography.bodyMedium.copy(
+                                                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                                                                )
+                                                                            )
+                                                                        }
+                                                                        innerTextField()
+                                                                    }
+                                                                }
+                                                            )
+                                                        }
+
+
+                                                        // CHECK
+                                                        Box(
+                                                            Modifier.width(colWidth.dp),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            IconButton(onClick = {
+                                                                completadas[key] = !completado
+                                                            }) {
+                                                                Icon(
+                                                                    imageVector = Icons.Filled.Check,
+                                                                    contentDescription = "Completado",
+                                                                    tint = if (completado) MaterialTheme.colorScheme.primary else Color.Gray
+                                                                )
+                                                            }
                                                         }
                                                     }
                                                 }
-                                            }
 
                                                 Spacer(Modifier.height(8.dp))
-                                            TextButton(onClick = {
-                                                val key = ejercicio.nombre to seriesTotales
-                                                // Buscar si hay datos anteriores para esa serie
-                                                val setAnterior = anterioresPorEjercicio[ejercicio.nombre]?.getOrNull(seriesTotales)
-                                                val textoAnterior = setAnterior?.let { "${it.peso}x${it.repeticiones}" } ?: "-"
+                                                TextButton(onClick = {
+                                                    val key = ejercicio.nombre to seriesTotales
+                                                    // Buscar si hay datos anteriores para esa serie
+                                                    val setAnterior =
+                                                        anterioresPorEjercicio[ejercicio.nombre]?.getOrNull(
+                                                            seriesTotales
+                                                        )
+                                                    Log.d("ANTERIORES DEBUG", "Cargados: ${anterioresPorEjercicio.keys}")
 
-                                                esperados[key] = ejercicio.peso.toString() to ejercicio.repeticiones.toString()
-                                                anteriores[key] = textoAnterior
-                                                hechos[key] = "" to ""
-                                                completadas[key] = false
-                                                viewModel.seriesPorEjercicio[ejercicio.id] = seriesTotales + 1
+                                                    val textoAnterior =
+                                                        setAnterior?.let { "${it.peso}x${it.repeticiones}" }
+                                                            ?: "-"
 
-                                            }) {
-                                                Icon(Icons.Filled.Add, contentDescription = null)
-                                                Spacer(Modifier.width(8.dp))
-                                                Text("Agregar Serie")
+                                                    esperados[key] =
+                                                        ejercicio.peso.toString() to ejercicio.repeticiones.toString()
+                                                    anteriores[key] = textoAnterior
+                                                    hechos[key] = "" to ""
+                                                    completadas[key] = false
+                                                    viewModel.seriesPorEjercicio[ejercicio.id] =
+                                                        seriesTotales + 1
+
+                                                }) {
+                                                    Icon(
+                                                        Icons.Filled.Add,
+                                                        contentDescription = null
+                                                    )
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Text("Agregar Serie")
+                                                }
                                             }
                                         }
                                     }
@@ -586,8 +705,7 @@ fun PantallaEjecutarEntreno(
                                 Text("❌ Cancelar")
                             }
                         }
-                    }
-                    ,
+                    },
                     dismissButton = {}
                 )
             }
@@ -604,8 +722,10 @@ fun PantallaEjecutarEntreno(
                             // ✅ Generar resumen
                             val resumenId = java.util.UUID.randomUUID().toString()
                             val ejerciciosResumen = entrenamiento.ejercicios.map { ej ->
-                                val sets = (0 until (viewModel.seriesPorEjercicio[ej.id] ?: ej.series)).mapNotNull { idx ->
-                                    val (peso, reps) = viewModel.hechos[ej.nombre to idx] ?: return@mapNotNull null
+                                val sets = (0 until (viewModel.seriesPorEjercicio[ej.id]
+                                    ?: ej.series)).mapNotNull { idx ->
+                                    val (peso, reps) = viewModel.hechos[ej.nombre to idx]
+                                        ?: return@mapNotNull null
                                     val p = peso.toFloatOrNull() ?: return@mapNotNull null
                                     val r = reps.toIntOrNull() ?: return@mapNotNull null
                                     SetData(peso = p, repeticiones = r)
@@ -625,8 +745,10 @@ fun PantallaEjecutarEntreno(
                                 duracionSec = seconds,
                                 calorias = caloriasEstimadas,
                                 pesoTotal = pesoTotal,
-                                ejercicios = ejerciciosResumen
+                                ejercicios = ejerciciosResumen,
+                                entrenamientoId = entrenamiento.id
                             )
+
 
                             debeGuardarEstado = false
 
