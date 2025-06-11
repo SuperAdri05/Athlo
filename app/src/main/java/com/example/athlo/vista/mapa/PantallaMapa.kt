@@ -247,6 +247,7 @@ fun PantallaMapa(navController: NavController, resumenViewModel: ResumenRutaView
                                 Button(
                                     onClick = {
                                         MapaController.detenerEntreno()
+                                        MapaController.detenerServicioSeguimiento(context)
                                         MapaController.detenerSeguimiento()
                                         entrenamientoId.value?.let { id ->
                                             CoroutineScope(Dispatchers.IO).launch {

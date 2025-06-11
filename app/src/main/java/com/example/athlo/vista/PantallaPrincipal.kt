@@ -33,6 +33,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.athlo.controlador.MapaController
 import com.example.athlo.controlador.SesionController
+import com.example.athlo.modelo.AppDatabase
+import com.example.athlo.modelo.entreno.EjercicioDisponible
 import com.example.athlo.modelo.entreno.Entrenamiento
 import com.example.athlo.modelo.entreno.EntrenoViewModel
 import com.example.athlo.modelo.entreno.limpiarEstadoEntreno
@@ -46,6 +48,7 @@ import com.example.athlo.vista.entreno.PantallaCrearEntreno
 import com.example.athlo.vista.entreno.PantallaDetalleEntreno
 import com.example.athlo.vista.entreno.PantallaEjecutarEntreno
 import com.example.athlo.vista.entreno.PantallaEntreno
+import com.example.athlo.vista.entreno.PantallaInformacionEjercicio
 import com.example.athlo.vista.entreno.PantallaResumenEntreno
 import com.example.athlo.vista.mapa.PantallaHistorialRutas
 import com.example.athlo.vista.mapa.PantallaMapa
@@ -186,6 +189,7 @@ fun PantallaPrincipal() {
                 composable("asignar_ejercicios") {
                     PantallaAsignarEjercicios(
                         viewModel = entrenoViewModel,
+                        navController = navController,
                         onBack = {
                             navController.popBackStack() },
                         onFinalizar = { nuevaLista ->
@@ -213,6 +217,29 @@ fun PantallaPrincipal() {
                 composable("chat_ia") {
                     PantallaChatIA(navController)
                 }
+
+                composable("info_ejercicio/{ejercicioId}") { backStackEntry ->
+                    val ejercicioId = backStackEntry.arguments?.getString("ejercicioId")
+                    val context = LocalContext.current
+                    val ejercicio = remember(ejercicioId) {
+                        mutableStateOf<EjercicioDisponible?>(null)
+                    }
+
+                    // Cargar desde Room (o Firestore si prefieres)
+                    LaunchedEffect(ejercicioId) {
+                        if (!ejercicioId.isNullOrBlank()) {
+                            val dao = AppDatabase.obtenerInstancia(context).ejercicioDao()
+                            ejercicio.value = dao.obtenerTodos().firstOrNull { it.id == ejercicioId }
+                        }
+                    }
+
+                    if (ejercicio.value != null) {
+                        PantallaInformacionEjercicio(ejercicio = ejercicio.value!!, navController = navController)
+                    } else {
+                        Text("Cargando información del ejercicio…")
+                    }
+                }
+
 
 
 

@@ -24,6 +24,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -55,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.athlo.controlador.EjercicioController
@@ -77,6 +79,7 @@ import java.util.UUID
 @Composable
 fun PantallaAsignarEjercicios(
     viewModel: EntrenoViewModel,
+    navController: NavHostController,
     onBack: () -> Unit,
     onFinalizar: (List<EjercicioAsignado>) -> Unit,
 ) {
@@ -295,29 +298,47 @@ fun PantallaAsignarEjercicios(
 
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Row(
+                                        modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context)
-                                                .data(ejercicio.foto).build(),
-                                            contentDescription = null,
-                                            modifier = Modifier
-                                                .size(48.dp)
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                        )
-                                        Column {
-                                            Text(
-                                                text = ejercicio.nombre,
-                                                style = MaterialTheme.typography.titleMedium
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            AsyncImage(
+                                                model = ImageRequest.Builder(context).data(ejercicio.foto).build(),
+                                                contentDescription = null,
+                                                modifier = Modifier
+                                                    .size(48.dp)
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.surfaceVariant)
                                             )
-                                            Text(
-                                                text = ejercicio.musculo,
-                                                style = MaterialTheme.typography.bodySmall
+                                            Column {
+                                                Text(
+                                                    text = ejercicio.nombre,
+                                                    style = MaterialTheme.typography.titleMedium
+                                                )
+                                                Text(
+                                                    text = ejercicio.musculo,
+                                                    style = MaterialTheme.typography.bodySmall
+                                                )
+                                            }
+                                        }
+
+                                        // Botón info
+                                        IconButton(
+                                            onClick = {
+                                                navController.navigate("info_ejercicio/${ejercicio.id}")
+                                            }
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Info,
+                                                contentDescription = "Ver información del ejercicio"
                                             )
                                         }
                                     }
+
 
 
                                     if (expanded) {
