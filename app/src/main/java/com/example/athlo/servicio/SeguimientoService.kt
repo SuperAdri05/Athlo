@@ -21,6 +21,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class SeguimientoService : LifecycleService() {
+    companion object {
+        const val ACTION_STOP = "com.example.athlo.STOP_SEGUIMIENTO"
+    }
     private lateinit var locationClient: FusedLocationProviderClient
     private var locationCallback: LocationCallback? = null
 
@@ -29,6 +32,15 @@ class SeguimientoService : LifecycleService() {
         locationClient = LocationServices.getFusedLocationProviderClient(this)
         iniciarNotificacion()
         iniciarSeguimiento()
+    }
+
+    override fun onStartCommand(intent: android.content.Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            stopForeground(true)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        return super.onStartCommand(intent, flags, startId)
     }
 
     @SuppressLint("ForegroundServiceType")
@@ -81,6 +93,7 @@ class SeguimientoService : LifecycleService() {
         locationCallback?.let {
             locationClient.removeLocationUpdates(it)
         }
+        stopForeground(true)
         super.onDestroy()
     }
 }

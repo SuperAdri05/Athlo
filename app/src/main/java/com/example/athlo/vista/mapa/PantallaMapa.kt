@@ -203,7 +203,7 @@ fun PantallaMapa(navController: NavController, resumenViewModel: ResumenRutaView
                                                     withContext(Dispatchers.Main) {
                                                         Toast.makeText(
                                                             context,
-                                                            "⚠️ El entrenamiento debe durar más de 10 segundos.",
+                                                            "⚠️ El entrenamiento debe durar más tiempo.",
                                                             Toast.LENGTH_LONG
                                                         ).show()
                                                     }

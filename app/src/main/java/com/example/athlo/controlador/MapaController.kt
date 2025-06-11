@@ -380,7 +380,11 @@ object MapaController {
     }
 
     fun detenerServicioSeguimiento(context: Context) {
-        context.stopService(Intent(context, SeguimientoService::class.java))
+        val stopIntent = Intent(context, SeguimientoService::class.java).apply {
+            action = SeguimientoService.ACTION_STOP
+        }
+        context.startService(stopIntent)
+        context.stopService(stopIntent)
         context.getSharedPreferences("entreno", Context.MODE_PRIVATE).edit().clear().apply()
     }
 
