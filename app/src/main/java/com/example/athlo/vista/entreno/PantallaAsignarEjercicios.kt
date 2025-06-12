@@ -112,16 +112,38 @@ fun PantallaAsignarEjercicios(
         .sortedWith(compareByDescending<EjercicioDisponible> { asignados.contains(it.nombre) }.thenBy { it.nombre })
 
     @Composable
-    fun NumberField(value: String, onChange: (String) -> Unit, label: String, maxLength: Int) {
+    fun NumberField(
+        value: String,
+        onChange: (String) -> Unit,
+        label: String,
+        maxLength: Int
+    ) {
+        val isPeso = label.contains("Peso", ignoreCase = true)
+
         OutlinedTextField(
             value = value,
-            onValueChange = { input -> onChange(input.filter { it.isDigit() }.take(maxLength)) },
+            onValueChange = { input ->
+                if (isPeso) {
+                    // Normaliza coma a punto
+                    val normalizado = input.replace(",", ".")
+                    val regex = Regex("^\\d{0,3}(\\.\\d{0,2})?$")
+                    if (normalizado.isEmpty() || regex.matches(normalizado)) {
+                        onChange(input) // mantenemos la entrada original visualmente
+                    }
+                } else {
+                    onChange(input.filter { it.isDigit() }.take(maxLength))
+                }
+            },
             label = { Text(text = label) },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = if (isPeso) KeyboardType.Decimal else KeyboardType.Number
+            ),
             modifier = Modifier.fillMaxWidth()
         )
     }
+
+
 
     Scaffold(
         topBar = {
@@ -210,7 +232,8 @@ fun PantallaAsignarEjercicios(
                                     ) {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                            modifier = Modifier.fillMaxWidth()
                                         ) {
                                             Box(
                                                 modifier = Modifier
@@ -227,19 +250,28 @@ fun PantallaAsignarEjercicios(
                                                         .clip(CircleShape)
                                                 )
                                             }
-                                            Column {
+                                            Column(
+                                                modifier = Modifier.weight(1f)
+                                            ) {
                                                 Text(text = ejercicio.nombre, style = MaterialTheme.typography.titleMedium)
                                                 Text(text = ejercicio.musculo, style = MaterialTheme.typography.bodySmall)
                                             }
-                                        }
-                                        IconButton(onClick = {
-                                            navController.navigate("info_ejercicio/${ejercicio.id}")
-                                        }) {
-                                            Icon(Icons.Default.Info, contentDescription = "Ver información del ejercicio")
+                                            IconButton(
+                                                onClick = {
+                                                    navController.navigate("info_ejercicio/${ejercicio.id}")
+                                                },
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Info,
+                                                    contentDescription = "Ver información del ejercicio"
+                                                )
+                                            }
                                         }
                                     }
 
-                                    if (expanded) {
+
+                                        if (expanded) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         NumberField(datos.first, { v -> datosEjercicios[ejercicio.nombre] = Triple(v, datos.second, datos.third) }, "Series", 2)
                                         NumberField(datos.second, { v -> datosEjercicios[ejercicio.nombre] = Triple(datos.first, v, datos.third) }, "Reps", 2)
@@ -249,12 +281,13 @@ fun PantallaAsignarEjercicios(
                                         Button(
                                             onClick = {
                                                 if (!agregado && camposOk) {
+                                                    val pesoFloat = datos.third.replace(",", ".").toFloatOrNull() ?: 0f
                                                     val newEj = EjercicioAsignado(
                                                         id = UUID.randomUUID().toString(),
                                                         nombre = ejercicio.nombre,
                                                         series = datos.first.toInt(),
                                                         repeticiones = datos.second.toInt(),
-                                                        peso = datos.third.toInt(),
+                                                        peso = pesoFloat,
                                                         foto = ejercicio.foto,
                                                         video = ejercicio.video,
                                                         idEjercicioFirestore = ejercicio.id

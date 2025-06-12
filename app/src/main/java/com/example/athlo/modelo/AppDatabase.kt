@@ -21,7 +21,7 @@ import com.example.athlo.modelo.mapa.PuntoRuta
         ResumenEntrenoEntity::class,
         ResumenSetEntity::class
     ],
-    version = 16
+    version = 18
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {

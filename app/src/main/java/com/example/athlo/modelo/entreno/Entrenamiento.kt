@@ -27,7 +27,7 @@ data class EjercicioAsignado(
     val nombre: String,
     var series: Int,
     val repeticiones: Int,
-    val peso: Int,
+    val peso: Float,
     val foto: String = "",
     val video: String = "",
     var idEjercicioFirestore: String = ""
@@ -53,7 +53,7 @@ fun EjercicioAsignadoEntity.toDomain() = EjercicioAsignado(
     peso = peso,
     foto = foto,
     video = video,
-    idEjercicioFirestore= idEjercicioFirestore
+    idEjercicioFirestore = idEjercicioFirestore
 )
 
 fun EntrenamientoEntity.toDomain() = Entrenamiento(

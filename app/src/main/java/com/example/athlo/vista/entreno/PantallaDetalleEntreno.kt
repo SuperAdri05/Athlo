@@ -1,7 +1,5 @@
 package com.example.athlo.vista.entreno
 
-import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -92,6 +90,8 @@ fun PantallaDetalleEntreno(
     onIniciar: () -> Unit,
     onAgregarEjercicios: () -> Unit,
 ) {
+    var expandedId by remember { mutableStateOf<String?>(null) }
+
     val context = LocalContext.current
 
     BackHandler {
@@ -251,8 +251,15 @@ fun PantallaDetalleEntreno(
             Modifier
                 .padding(inner)
                 .fillMaxSize()
+                .pointerInput(mostrarAccionesId) {
+                    detectTapGestures {
+                        mostrarAccionesId = null
+                        expandedId = null
+                    }
+                }
                 .padding(16.dp)
-        ) {
+        )
+        {
             if (cargando) {
                 // Indicador de carga
                 CircularProgressIndicator(Modifier.align(Alignment.Center))
@@ -273,7 +280,11 @@ fun PantallaDetalleEntreno(
                         modifier = Modifier.fillMaxSize()
                     ) {
                         // Datos generales
-                        var datosProgreso by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
+                        var datosProgreso by remember {
+                            mutableStateOf<List<Pair<String, Int>>>(
+                                emptyList()
+                            )
+                        }
 
                         LaunchedEffect(viewModel.entrenamientoSeleccionado?.id) {
                             val resumenes = EntrenoController.obtenerTodosLosResumenes(context)
@@ -285,7 +296,11 @@ fun PantallaDetalleEntreno(
                                     val fecha = formato.format(it.fecha)
                                     fecha to it.pesoTotal.toInt()
                                 }
-                                .sortedWith(compareBy({ it.first.substring(0, 10) }, { it.first.substring(11) }))
+                                .sortedWith(
+                                    compareBy(
+                                        { it.first.substring(0, 10) },
+                                        { it.first.substring(11) })
+                                )
                         }
 
                         if (datosProgreso.isEmpty()) {
@@ -300,11 +315,14 @@ fun PantallaDetalleEntreno(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    Text("❗ No se ha registrado aún ningún entreno.", style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        "❗ No se ha registrado aún ningún entreno.",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
                                 }
                             }
                         } else {
-                            GraficoProgresoPeso(datos = datosProgreso, alturaMaxima = 150.dp)
+                            GraficoProgresoPeso(datos = datosProgreso, alturaMaxima = 100.dp)
                         }
 
                         Spacer(Modifier.height(16.dp))
@@ -319,149 +337,166 @@ fun PantallaDetalleEntreno(
                         }
 
                         // Lista de ejercicios con long-press para acciones
-                        LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.weight(1f)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .pointerInput(mostrarAccionesId) {
+                                    detectTapGestures {
+                                        // Cierra el panel si está abierto
+                                        if (mostrarAccionesId != null) mostrarAccionesId = null
+                                    }
+                                }
                         ) {
-                            items(ejercicios, key = { it.id }) { ejercicio ->
-                                var expanded by remember { mutableStateOf(false) }
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                items(ejercicios, key = { it.id }) { ejercicio ->
+                                    var expanded = expandedId == ejercicio.id
 
-                                Box(Modifier.fillMaxWidth()) {
-                                    Card(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .animateContentSize()
-                                            .combinedClickable(
-                                                onClick = {
-                                                    expanded = !expanded
-                                                    mostrarAccionesId = null
-                                                },
-                                                onLongClick = {
-                                                    if (enCurso == null) {
-                                                        mostrarAccionesId = ejercicio.id
+                                    Box(Modifier.fillMaxWidth()) {
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .animateContentSize()
+                                                .combinedClickable(
+                                                    onClick = {
+                                                        expandedId = if (expandedId == ejercicio.id) null else ejercicio.id
+                                                        mostrarAccionesId = null
+
+                                                    },
+                                                    onLongClick = {
+                                                        if (enCurso == null) {
+                                                            mostrarAccionesId = ejercicio.id
+                                                        }
                                                     }
-                                                }
-                                            ),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                                    ) {
-                                        Column(Modifier.padding(16.dp)) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(64.dp)
-                                                        .shadow(6.dp, CircleShape, clip = false)
-                                                        .clip(CircleShape)
-                                                        .background(MaterialTheme.colorScheme.surface)
-                                                        .clickable {
-                                                            navController.navigate("info_ejercicio/${ejercicio.idEjercicioFirestore}")
-                                                        },
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    AsyncImage(
-                                                        model = ejercicio.foto,
-                                                        contentDescription = null,
-                                                        modifier = Modifier
-                                                            .fillMaxSize()
-                                                            .clip(CircleShape)
-                                                    )
-                                                }
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(
-                                                        ejercicio.nombre,
-                                                        style = MaterialTheme.typography.titleMedium
-                                                    )
-                                                }
-                                                Icon(
-                                                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                                    contentDescription = null
-                                                )
-                                            }
-
-                                            if (expanded) {
-                                                Spacer(Modifier.height(8.dp))
-                                                Text("Series: ${ejercicio.series} · Reps: ${ejercicio.repeticiones} · Peso: ${ejercicio.peso} kg")
-                                                Spacer(Modifier.height(4.dp))
-                                                TextButton(onClick = {
-                                                    navController.navigate("info_ejercicio/${ejercicio.idEjercicioFirestore}")
-                                                }) {
-                                                    Text(
-                                                        "ℹ️ Ver información",
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
-                                                }
-
-                                            }
-                                        }
-                                    }
-
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .wrapContentSize(Alignment.TopEnd)
-                                    ) {
-                                        androidx.compose.animation.AnimatedVisibility(
-                                            visible = mostrarAccionesId == ejercicio.id && enCurso == null,
-                                            enter = fadeIn(),
-                                            exit = fadeOut()
+                                                ),
+                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                                         ) {
-                                            Column(
-                                                horizontalAlignment = Alignment.End,
-                                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                IconButton(onClick = {
-                                                    if (enCurso == null) {
-                                                        ejercicioEditando = ejercicio
+                                            Column(Modifier.padding(16.dp)) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(64.dp)
+                                                            .shadow(6.dp, CircleShape, clip = false)
+                                                            .clip(CircleShape)
+                                                            .background(Color.White)
+                                                            .clickable {
+                                                                navController.navigate("info_ejercicio/${ejercicio.idEjercicioFirestore}")
+                                                            },
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        AsyncImage(
+                                                            model = ejercicio.foto,
+                                                            contentDescription = null,
+                                                            modifier = Modifier
+                                                                .fillMaxSize()
+                                                                .clip(CircleShape)
+                                                        )
                                                     }
-                                                    mostrarAccionesId = null
-                                                }) {
-                                                    Icon(Icons.Default.Edit, contentDescription = "Editar ejercicio")
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            ejercicio.nombre,
+                                                            style = MaterialTheme.typography.titleMedium
+                                                        )
+                                                    }
+                                                    Icon(
+                                                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                                        contentDescription = null
+                                                    )
                                                 }
 
-                                                IconButton(onClick = {
-                                                    if (enCurso == null && ejercicios.size > 1) {
-                                                        ejercicioParaEliminar = ejercicio
-                                                    } else if (ejercicios.size <= 1) {
-                                                        Toast.makeText(context, "Debe quedar al menos 1 ejercicio", Toast.LENGTH_SHORT).show()
+                                                if (expanded) {
+                                                    Spacer(Modifier.height(8.dp))
+                                                    Text("Series: ${ejercicio.series} · Reps: ${ejercicio.repeticiones} · Peso: ${ejercicio.peso} kg")
+                                                    Spacer(Modifier.height(4.dp))
+                                                    TextButton(onClick = {
+                                                        navController.navigate("info_ejercicio/${ejercicio.idEjercicioFirestore}")
+                                                    }) {
+                                                        Text(
+                                                            "ℹ️ Ver información",
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
                                                     }
-                                                    mostrarAccionesId = null
-                                                }) {
-                                                    Icon(
-                                                        Icons.Default.Delete,
-                                                        contentDescription = "Borrar ejercicio",
-                                                        tint = if (ejercicios.size > 1) MaterialTheme.colorScheme.error else Color.Gray
-                                                    )
+
+                                                }
+                                            }
+                                        }
+
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .wrapContentSize(Alignment.TopEnd)
+                                        ) {
+                                            androidx.compose.animation.AnimatedVisibility(
+                                                visible = mostrarAccionesId == ejercicio.id && enCurso == null,
+                                                enter = fadeIn(),
+                                                exit = fadeOut()
+                                            ) {
+                                                Column(
+                                                    horizontalAlignment = Alignment.End,
+                                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    IconButton(onClick = {
+                                                        if (enCurso == null) {
+                                                            ejercicioEditando = ejercicio
+                                                        }
+                                                        mostrarAccionesId = null
+                                                    }) {
+                                                        Icon(
+                                                            Icons.Default.Edit,
+                                                            contentDescription = "Editar ejercicio"
+                                                        )
+                                                    }
+
+                                                    IconButton(onClick = {
+                                                        if (enCurso == null && ejercicios.size > 1) {
+                                                            ejercicioParaEliminar = ejercicio
+                                                        } else if (ejercicios.size <= 1) {
+                                                            Toast.makeText(
+                                                                context,
+                                                                "Debe quedar al menos 1 ejercicio",
+                                                                Toast.LENGTH_SHORT
+                                                            ).show()
+                                                        }
+                                                        mostrarAccionesId = null
+                                                    }) {
+                                                        Icon(
+                                                            Icons.Default.Delete,
+                                                            contentDescription = "Borrar ejercicio",
+                                                            tint = if (ejercicios.size > 1) MaterialTheme.colorScheme.error else Color.Gray
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
-                            }
-                            item {
-                                Spacer(Modifier.height(8.dp))
-                                OutlinedButton(
-                                    onClick = { if (enCurso == null) onAgregarEjercicios() },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp),
-                                    enabled = enCurso == null
-                                ) {
-                                    Icon(Icons.Default.Add, contentDescription = null)
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        "Añadir ejercicio",
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
+                                item {
+                                    Spacer(Modifier.height(8.dp))
+                                    OutlinedButton(
+                                        onClick = { if (enCurso == null) onAgregarEjercicios() },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp),
+                                        enabled = enCurso == null
+                                    ) {
+                                        Icon(Icons.Default.Add, contentDescription = null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            "Añadir ejercicio",
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
+                                    }
+                                    Spacer(Modifier.height(80.dp)) // espacio para el panel inferior
                                 }
-                                Spacer(Modifier.height(80.dp)) // espacio para el panel inferior
+
+
                             }
-
-
                         }
-
                     }
                     if (enCurso == null) {
                         ejercicioEditando?.let { ej ->
@@ -491,10 +526,14 @@ fun PantallaDetalleEntreno(
                                         OutlinedTextField(
                                             value = peso,
                                             onValueChange = {
-                                                if (it.all(Char::isDigit)) peso = it.take(3)
+                                                val nuevo = it.replace(',', '.')
+                                                if (nuevo.matches(Regex("^\\d{0,3}(\\.\\d{0,2})?\$"))) {
+                                                    peso = nuevo
+                                                }
                                             },
                                             label = { Text("Peso (kg)") }
                                         )
+
                                     }
                                 },
                                 confirmButton = {
@@ -502,13 +541,15 @@ fun PantallaDetalleEntreno(
                                         val actualizado = ej.copy(
                                             series = series.toIntOrNull() ?: ej.series,
                                             repeticiones = reps.toIntOrNull() ?: ej.repeticiones,
-                                            peso = peso.toIntOrNull() ?: ej.peso
+                                            peso = peso.toFloatOrNull() ?: ej.peso
                                         )
-                                        ejercicios = ejercicios.map { if (it.id == ej.id) actualizado else it }
+                                        ejercicios =
+                                            ejercicios.map { if (it.id == ej.id) actualizado else it }
                                         entrenamiento = entrenamiento.copy(ejercicios = ejercicios)
                                         viewModel.entrenamientoSeleccionado = entrenamiento
 
-                                        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@TextButton
+                                        val uid = FirebaseAuth.getInstance().currentUser?.uid
+                                            ?: return@TextButton
                                         EntrenoController.guardarAsignacion(
                                             context,
                                             uid,
@@ -633,7 +674,7 @@ fun PantallaDetalleEntreno(
 fun GraficoProgresoPeso(
     datos: List<Pair<String, Int>>,
     alturaMaxima: Dp = 150.dp,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var seleccionado by remember { mutableStateOf<Pair<String, Int>?>(null) }
 

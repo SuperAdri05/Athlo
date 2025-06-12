@@ -356,7 +356,7 @@ fun PantallaEjecutarEntreno(
 
                                             // Título y expansión
                                             Row(
-                                                modifier = Modifier.weight(1f),
+                                                modifier = Modifier.fillMaxWidth(),
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
@@ -365,7 +365,8 @@ fun PantallaEjecutarEntreno(
                                                     style = MaterialTheme.typography.titleMedium.copy(
                                                         color = MaterialTheme.colorScheme.onPrimary,
                                                         fontSize = 18.sp
-                                                    )
+                                                    ),
+                                                    modifier = Modifier.weight(1f)
                                                 )
                                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                                     IconButton(
@@ -379,18 +380,21 @@ fun PantallaEjecutarEntreno(
                                                             tint = MaterialTheme.colorScheme.onPrimary
                                                         )
                                                     }
-                                                    Icon(
-                                                        imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                                                        contentDescription = "Expandir ejercicio",
-                                                        tint = MaterialTheme.colorScheme.onPrimary
-                                                    )
+                                                    IconButton(
+                                                        onClick = { expanded = !expanded }
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                                            contentDescription = "Expandir ejercicio",
+                                                            tint = MaterialTheme.colorScheme.onPrimary
+                                                        )
+                                                    }
                                                 }
                                             }
-
                                         }
 
 
-                                        if (expanded) {
+                                            if (expanded) {
                                             Column {
                                                 val screenWidth =
                                                     LocalContext.current.resources.displayMetrics.widthPixels / LocalContext.current.resources.displayMetrics.density
@@ -504,12 +508,12 @@ fun PantallaEjecutarEntreno(
                                                                 value = pesoReal,
                                                                 onValueChange = { input ->
                                                                     // Permitir solo números, coma y máximo dos decimales
-                                                                    val regex =
-                                                                        Regex("^\\d{0,3}(,\\d{0,2})?$")
-                                                                    if (regex.matches(input)) {
-                                                                        hechos[key] =
-                                                                            input to repsReal
+                                                                    val normalizado = input.replace(',', '.')
+                                                                    val regex = Regex("^\\d{0,3}(\\.\\d{0,2})?$")
+                                                                    if (regex.matches(normalizado)) {
+                                                                        hechos[key] = normalizado to repsReal
                                                                     }
+
                                                                 },
                                                                 keyboardOptions = KeyboardOptions(
                                                                     keyboardType = KeyboardType.Number
@@ -722,16 +726,22 @@ fun PantallaEjecutarEntreno(
                             // ✅ Generar resumen
                             val resumenId = java.util.UUID.randomUUID().toString()
                             val ejerciciosResumen = entrenamiento.ejercicios.map { ej ->
-                                val sets = (0 until (viewModel.seriesPorEjercicio[ej.id]
-                                    ?: ej.series)).mapNotNull { idx ->
-                                    val (peso, reps) = viewModel.hechos[ej.nombre to idx]
-                                        ?: return@mapNotNull null
-                                    val p = peso.toFloatOrNull() ?: return@mapNotNull null
-                                    val r = reps.toIntOrNull() ?: return@mapNotNull null
-                                    SetData(peso = p, repeticiones = r)
+                                val sets = (0 until (viewModel.seriesPorEjercicio[ej.id] ?: ej.series)).mapNotNull { idx ->
+                                    val key = ej.nombre.lowercase().trim() to idx
+                                    val (pesoStr, repsStr) = viewModel.hechos[key] ?: return@mapNotNull null
+
+                                    val pesoNormalizado = pesoStr.replace(",", ".")
+                                    val peso = pesoNormalizado.toFloatOrNull()
+                                    val reps = repsStr.toIntOrNull()
+
+                                    if (peso != null && reps != null && reps > 0) {
+                                        SetData(peso = peso, repeticiones = reps)
+                                    } else null
                                 }
+
                                 ResumenEjercicio(nombre = ej.nombre, sets = sets)
                             }
+
 
                             val pesoTotal = ejerciciosResumen.flatMap { it.sets }
                                 .sumOf { (it.peso * it.repeticiones).toDouble() }

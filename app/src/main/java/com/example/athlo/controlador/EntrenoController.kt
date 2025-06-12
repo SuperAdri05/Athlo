@@ -160,15 +160,15 @@ object EntrenoController {
         // Aquí preservamos el idEjercicioFirestore
         val ejEntities = ejerciciosAsignados.map {
             EjercicioAsignadoEntity(
-                id                  = it.id.ifBlank { java.util.UUID.randomUUID().toString() },
-                entrenamientoId     = entrenamiento.id,
-                nombre              = it.nombre,
-                series              = it.series,
-                repeticiones        = it.repeticiones,
-                peso                = it.peso,
-                foto                = it.foto,
-                video               = it.video,
-                idEjercicioFirestore= it.idEjercicioFirestore
+                id = it.id.ifBlank { java.util.UUID.randomUUID().toString() },
+                entrenamientoId = entrenamiento.id,
+                nombre = it.nombre,
+                series = it.series,
+                repeticiones = it.repeticiones,
+                peso = it.peso,
+                foto = it.foto,
+                video = it.video,
+                idEjercicioFirestore = it.idEjercicioFirestore
             )
         }
 
@@ -207,14 +207,14 @@ object EntrenoController {
         val remote = doc.toObject(EjercicioAsignadoRemote::class.java) ?: return null
         val masterId = remote.ejercicioRef?.id ?: ""
         return EjercicioAsignadoEntity(
-            id                   = doc.id,
-            entrenamientoId      = entrenoId,
-            nombre               = remote.nombre,
-            series               = remote.series,
-            repeticiones         = remote.repeticiones,
-            peso                 = remote.peso,
-            foto                 = remote.foto,
-            video                = remote.video,
+            id = doc.id,
+            entrenamientoId = entrenoId,
+            nombre = remote.nombre,
+            series = remote.series,
+            repeticiones = remote.repeticiones,
+            peso = remote.peso,
+            foto = remote.foto,
+            video = remote.video,
             idEjercicioFirestore = masterId
         )
     }
