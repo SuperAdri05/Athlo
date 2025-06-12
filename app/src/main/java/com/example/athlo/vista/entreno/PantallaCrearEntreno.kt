@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
@@ -171,8 +173,8 @@ fun PantallaCrearEntreno(
         Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
             Text("Nivel", fontSize = 16.sp)
             Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                niveles.forEach { nivel ->
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(niveles) { nivel ->
                     AssistChip(
                         onClick = { nivelSeleccionado = nivel },
                         label = { Text(nivel) },
@@ -189,6 +191,7 @@ fun PantallaCrearEntreno(
                     )
                 }
             }
+
         }
 
         Spacer(modifier = Modifier.height(32.dp))

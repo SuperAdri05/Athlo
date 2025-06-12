@@ -62,7 +62,7 @@ fun PantallaDatosIniciales(navController: NavController) {
         OutlinedTextField(
             value = peso,
             onValueChange = {
-                if (it.matches(Regex("""\d{0,3}([.,]?\d*)?"""))) peso = it.take(5)
+                if (it.matches(Regex("""\d{0,3}([.,]?\d{0,2})?"""))) peso = it.replace(',', '.').take(6)
             },
             label = { Text("Peso (kg)") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
