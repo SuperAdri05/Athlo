@@ -273,7 +273,7 @@ fun PantallaAsignarEjercicios(
 
                                         if (expanded) {
                                         Spacer(modifier = Modifier.height(8.dp))
-                                        NumberField(datos.first, { v -> datosEjercicios[ejercicio.nombre] = Triple(v, datos.second, datos.third) }, "Series", 2)
+                                        NumberField(datos.first, { v -> datosEjercicios[ejercicio.nombre] = Triple(v, datos.second, datos.third) }, "Series", 1)
                                         NumberField(datos.second, { v -> datosEjercicios[ejercicio.nombre] = Triple(datos.first, v, datos.third) }, "Reps", 2)
                                         NumberField(datos.third, { v -> datosEjercicios[ejercicio.nombre] = Triple(datos.first, datos.second, v) }, "Peso (kg)", 3)
                                         Spacer(modifier = Modifier.height(8.dp))

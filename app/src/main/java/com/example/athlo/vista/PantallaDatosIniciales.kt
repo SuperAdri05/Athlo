@@ -69,7 +69,6 @@ fun PantallaDatosIniciales(navController: NavController) {
             modifier = Modifier.fillMaxWidth()
         )
 
-
         OutlinedTextField(
             value = altura,
             onValueChange = {
@@ -79,7 +78,6 @@ fun PantallaDatosIniciales(navController: NavController) {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth()
         )
-
 
         OutlinedTextField(
             value = edad,

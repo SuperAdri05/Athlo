@@ -512,7 +512,7 @@ fun PantallaDetalleEntreno(
                                         OutlinedTextField(
                                             value = series,
                                             onValueChange = {
-                                                if (it.all(Char::isDigit)) series = it.take(2)
+                                                if (it.all(Char::isDigit)) series = it.take(1)
                                             },
                                             label = { Text("Series") }
                                         )
