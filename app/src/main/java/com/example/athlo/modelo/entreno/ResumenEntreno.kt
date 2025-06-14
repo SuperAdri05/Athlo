@@ -10,7 +10,7 @@ data class ResumenEntreno(
     val calorias: Int = 0,          // Calorías estimadas
     val pesoTotal: Float = 0f,      // Suma de (peso × reps) de todas las series
     val ejercicios: List<ResumenEjercicio> = emptyList(), // Datos por ejercicio
-    val entrenamientoId: String
+    val entrenamientoId: String = ""
     )
 
 @Keep

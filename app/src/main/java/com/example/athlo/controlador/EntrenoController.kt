@@ -70,7 +70,7 @@ object EntrenoController {
     fun subirEjercicioAsignadoUsuario(uid: String, entId: String, ej: EjercicioAsignadoEntity) {
         val firestoreRef = firestore ?: return
 
-        // ❗ VALIDACIÓN: debe tener ID válido de Firestore
+        // VALIDACIÓN: debe tener ID válido de Firestore
         val ejercicioId = ej.idEjercicioFirestore
         if (ejercicioId.isNullOrBlank()) {
             println("❌ ID del ejercicio vacío. No se puede crear referencia a Firestore.")
@@ -79,7 +79,7 @@ object EntrenoController {
 
         val refEjercicio = firestoreRef.collection("ejercicios").document(ejercicioId)
 
-        // 🔄 Recuperamos el documento del ejercicio original
+        // Recuperamos el documento del ejercicio original
         refEjercicio.get().addOnSuccessListener { doc ->
             val foto = doc.getString("foto") ?: ""
             val video = doc.getString("video") ?: ""
@@ -127,10 +127,10 @@ object EntrenoController {
                 val remotos = snap.toObjects(EntrenamientoEntity::class.java)
 
                 GlobalScope.launch(Dispatchers.IO) {
-                    // ① Borra todo lo local
+                    // Borra lo local
                     db?.entrenamientoDao()?.borrarTodosLosEntrenamientos()
 
-                    // ② Inserta los recién bajados
+                    // Inserta los recién bajados
                     remotos.forEach { db?.entrenamientoDao()?.insertarEntrenamiento(it) }
                 }
             }
@@ -173,10 +173,10 @@ object EntrenoController {
         }
 
         GlobalScope.launch(Dispatchers.IO) {
-            // 1️⃣ Local (Room)
+            // Local (Room)
             guardarEntrenamientoCompleto(entEntity, ejEntities)
 
-            // 2️⃣ Firestore
+            // Firestore
             subirEntrenamientoUsuario(uid, entEntity)
             ejEntities.forEach { subirEjercicioAsignadoUsuario(uid, entEntity.id, it) }
         }
@@ -407,7 +407,7 @@ object EntrenoController {
         val firestore = FirebaseFirestore.getInstance()
 
         return try {
-            // 🔄 Intentar descargar de Firestore
+            // Intentar descargar de Firestore
             val snapshot = firestore.collection("usuarios")
                 .document(uid ?: throw Exception("Usuario no autenticado"))
                 .collection("resumenesEntrenos")
@@ -452,7 +452,7 @@ object EntrenoController {
 
 
         } catch (e: Exception) {
-            // 🔁 Fallback local con Room
+            // Fallback local con Room
             val dao = AppDatabase.obtenerInstancia(context).entrenamientoDao()
             val resumenes = dao.obtenerResumenes()
             resumenes.map { resumen ->

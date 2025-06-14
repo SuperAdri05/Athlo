@@ -5,7 +5,16 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -14,11 +23,34 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -94,18 +126,21 @@ fun PantallaAsignarEjercicios(
     LaunchedEffect(entrenoId) {
         if (entrenoId.isBlank()) return@LaunchedEffect
         inicial = try {
-            EntrenoController.obtenerEjerciciosDeEntrenoDesdeFirestore(entrenoId).map { it.toDomain() }
+            EntrenoController.obtenerEjerciciosDeEntrenoDesdeFirestore(entrenoId)
+                .map { it.toDomain() }
         } catch (_: Exception) {
             EntrenoController.obtenerEjerciciosDeEntreno(entrenoId).map { it.toDomain() }
         }
         asignados = inicial.map { it.nombre }.toSet()
         datosEjercicios.clear()
         inicial.forEach { ej ->
-            datosEjercicios[ej.nombre] = Triple(ej.series.toString(), ej.repeticiones.toString(), ej.peso.toString())
+            datosEjercicios[ej.nombre] =
+                Triple(ej.series.toString(), ej.repeticiones.toString(), ej.peso.toString())
         }
     }
 
-    val grupos = remember(ejercicios) { listOf("Todos") + ejercicios.map { it.musculo }.distinct().sorted() }
+    val grupos =
+        remember(ejercicios) { listOf("Todos") + ejercicios.map { it.musculo }.distinct().sorted() }
     val listaUI = ejercicios
         .filter { grupoSeleccion == "Todos" || it.musculo == grupoSeleccion }
         .filter { it.nombre.contains(searchQuery, ignoreCase = true) }
@@ -116,7 +151,7 @@ fun PantallaAsignarEjercicios(
         value: String,
         onChange: (String) -> Unit,
         label: String,
-        maxLength: Int
+        maxLength: Int,
     ) {
         val isPeso = label.contains("Peso", ignoreCase = true)
 
@@ -183,7 +218,9 @@ fun PantallaAsignarEjercicios(
                         IconButton(onClick = { showFilter = true }) {
                             Icon(Icons.Filled.FilterList, contentDescription = null)
                         }
-                        DropdownMenu(expanded = showFilter, onDismissRequest = { showFilter = false }) {
+                        DropdownMenu(
+                            expanded = showFilter,
+                            onDismissRequest = { showFilter = false }) {
                             grupos.forEach { grupo ->
                                 DropdownMenuItem(text = { Text(text = grupo) }, onClick = {
                                     grupoSeleccion = grupo
@@ -197,30 +234,49 @@ fun PantallaAsignarEjercicios(
         }
     ) { inner ->
         Box(
-            modifier = Modifier.padding(inner).fillMaxSize(),
+            modifier = Modifier
+                .padding(inner)
+                .fillMaxSize(),
             contentAlignment = Alignment.BottomCenter
         ) {
             when {
                 cargando -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                errorMsg != null -> Text(text = errorMsg!!, color = MaterialTheme.colorScheme.error, modifier = Modifier.align(Alignment.Center))
+                errorMsg != null -> Text(
+                    text = errorMsg!!,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+
                 else -> {
                     LazyColumn(
                         state = listState,
-                        modifier = Modifier.fillMaxSize().padding(bottom = 80.dp),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(bottom = 80.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(listaUI, key = { it.nombre }) { ejercicio ->
                             val expanded = ejercicio.nombre in expandedCards
                             val datos = datosEjercicios[ejercicio.nombre] ?: Triple("", "", "")
-                            val camposOk = datos.first.isNotBlank() && datos.second.isNotBlank() && datos.third.isNotBlank()
+                            val camposOk =
+                                datos.first.isNotBlank() && datos.second.isNotBlank() && datos.third.isNotBlank()
                             val agregado = ejercicio.nombre in asignados
 
                             Card(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).clickable {
-                                    expandedCards = if (expanded) expandedCards - ejercicio.nombre else expandedCards + ejercicio.nombre
-                                }.animateContentSize(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp)
+                                    .clickable {
+                                        expandedCards =
+                                            if (expanded) expandedCards - ejercicio.nombre else expandedCards + ejercicio.nombre
+                                    }
+                                    .animateContentSize(),
                                 shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = if (agregado) Color(0xFF90CAF9).copy(alpha = 0.3f) else MaterialTheme.colorScheme.surfaceVariant),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (agregado) Color(
+                                        0xFF90CAF9
+                                    ).copy(alpha = 0.3f) else MaterialTheme.colorScheme.surfaceVariant
+                                ),
                                 elevation = CardDefaults.cardElevation(4.dp)
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
@@ -231,9 +287,9 @@ fun PantallaAsignarEjercicios(
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Row(
+                                            modifier = Modifier.fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                            modifier = Modifier.fillMaxWidth()
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                                         ) {
                                             Box(
                                                 modifier = Modifier
@@ -243,23 +299,28 @@ fun PantallaAsignarEjercicios(
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 AsyncImage(
-                                                    model = ImageRequest.Builder(context).data(ejercicio.foto).build(),
+                                                    model = ImageRequest.Builder(context)
+                                                        .data(ejercicio.foto).build(),
                                                     contentDescription = null,
                                                     modifier = Modifier
                                                         .fillMaxSize()
                                                         .clip(CircleShape)
                                                 )
                                             }
-                                            Column(
-                                                modifier = Modifier.weight(1f)
-                                            ) {
-                                                Text(text = ejercicio.nombre, style = MaterialTheme.typography.titleMedium)
-                                                Text(text = ejercicio.musculo, style = MaterialTheme.typography.bodySmall)
+
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = ejercicio.nombre,
+                                                    style = MaterialTheme.typography.titleMedium
+                                                )
+                                                Text(
+                                                    text = ejercicio.musculo,
+                                                    style = MaterialTheme.typography.bodySmall
+                                                )
                                             }
+
                                             IconButton(
-                                                onClick = {
-                                                    navController.navigate("info_ejercicio/${ejercicio.id}")
-                                                },
+                                                onClick = { navController.navigate("info_ejercicio/${ejercicio.id}") },
                                                 modifier = Modifier.size(36.dp)
                                             ) {
                                                 Icon(
@@ -267,21 +328,59 @@ fun PantallaAsignarEjercicios(
                                                     contentDescription = "Ver información del ejercicio"
                                                 )
                                             }
+
+                                            IconButton(
+                                                onClick = {
+                                                    expandedCards =
+                                                        if (expanded) expandedCards - ejercicio.nombre else expandedCards + ejercicio.nombre
+                                                },
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                                    contentDescription = if (expanded) "Minimizar" else "Expandir"
+                                                )
+                                            }
                                         }
                                     }
 
-
-                                        if (expanded) {
+                                    if (expanded) {
                                         Spacer(modifier = Modifier.height(8.dp))
-                                        NumberField(datos.first, { v -> datosEjercicios[ejercicio.nombre] = Triple(v, datos.second, datos.third) }, "Series", 1)
-                                        NumberField(datos.second, { v -> datosEjercicios[ejercicio.nombre] = Triple(datos.first, v, datos.third) }, "Reps", 2)
-                                        NumberField(datos.third, { v -> datosEjercicios[ejercicio.nombre] = Triple(datos.first, datos.second, v) }, "Peso (kg)", 3)
+                                        NumberField(
+                                            datos.first,
+                                            { v ->
+                                                datosEjercicios[ejercicio.nombre] =
+                                                    Triple(v, datos.second, datos.third)
+                                            },
+                                            "Series",
+                                            1
+                                        )
+                                        NumberField(
+                                            datos.second,
+                                            { v ->
+                                                datosEjercicios[ejercicio.nombre] =
+                                                    Triple(datos.first, v, datos.third)
+                                            },
+                                            "Reps",
+                                            2
+                                        )
+                                        NumberField(
+                                            datos.third,
+                                            { v ->
+                                                datosEjercicios[ejercicio.nombre] =
+                                                    Triple(datos.first, datos.second, v)
+                                            },
+                                            "Peso (kg)",
+                                            3
+                                        )
                                         Spacer(modifier = Modifier.height(8.dp))
-                                        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@Card
+                                        val uid = FirebaseAuth.getInstance().currentUser?.uid
+                                            ?: return@Card
                                         Button(
                                             onClick = {
                                                 if (!agregado && camposOk) {
-                                                    val pesoFloat = datos.third.replace(",", ".").toFloatOrNull() ?: 0f
+                                                    val pesoFloat = datos.third.replace(",", ".")
+                                                        .toFloatOrNull() ?: 0f
                                                     val newEj = EjercicioAsignado(
                                                         id = UUID.randomUUID().toString(),
                                                         nombre = ejercicio.nombre,
@@ -296,9 +395,11 @@ fun PantallaAsignarEjercicios(
                                                     inicial = inicial + newEj
                                                     expandedCards = expandedCards - ejercicio.nombre
                                                 } else if (agregado) {
-                                                    val asign = inicial.first { it.nombre == ejercicio.nombre }
+                                                    val asign =
+                                                        inicial.first { it.nombre == ejercicio.nombre }
                                                     asignados = asignados - ejercicio.nombre
-                                                    inicial = inicial.filterNot { it.id == asign.id }
+                                                    inicial =
+                                                        inicial.filterNot { it.id == asign.id }
                                                 }
                                             },
                                             enabled = camposOk || agregado,
@@ -317,15 +418,28 @@ fun PantallaAsignarEjercicios(
                         onClick = {
                             val uid = FirebaseAuth.getInstance().currentUser!!.uid
                             scope.launch {
-                                EntrenoController.borrarTodasAsignacionesUsuario(context, uid, entrenoId)
-                                EntrenoController.guardarAsignacion(context, uid, viewModel.entrenamientoSeleccionado, inicial)
+                                EntrenoController.borrarTodasAsignacionesUsuario(
+                                    context,
+                                    uid,
+                                    entrenoId
+                                )
+                                EntrenoController.guardarAsignacion(
+                                    context,
+                                    uid,
+                                    viewModel.entrenamientoSeleccionado,
+                                    inicial
+                                )
                             }
-                            viewModel.entrenamientoActual = viewModel.entrenamientoSeleccionado?.copy(ejercicios = inicial)
+                            viewModel.entrenamientoActual =
+                                viewModel.entrenamientoSeleccionado?.copy(ejercicios = inicial)
                             viewModel.entrenamientoSeleccionado = viewModel.entrenamientoActual
                             onFinalizar(inicial)
                         },
                         enabled = inicial.isNotEmpty(),
-                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(16.dp)
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .padding(16.dp)
                     ) {
                         Text("Aplicar cambios (${inicial.size})")
                     }

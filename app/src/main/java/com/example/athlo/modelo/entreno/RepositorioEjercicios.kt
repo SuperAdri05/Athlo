@@ -9,7 +9,7 @@ class RepositorioEjercicios(private val context: Context) {
 
     private val dao = AppDatabase.obtenerInstancia(context).ejercicioDao()
     private val firestore = FirebaseFirestore.getInstance()
-
+    private var cache: List<EjercicioDisponible>? = null
     /** 🔄 Sincroniza Firestore → Room */
     suspend fun sincronizarDesdeFirestore() {
         try {
@@ -36,15 +36,24 @@ class RepositorioEjercicios(private val context: Context) {
 
             dao.borrarTodos()
             lista.forEach { dao.insertar(it) }
-
+            cache = lista
         } catch (e: Exception) {
             // TODO: log o manejo de error según tus necesidades
         }
     }
 
-    /** 📥 Devuelve los ejercicios guardados localmente (Room) */
-    suspend fun obtenerLocales(): List<EjercicioDisponible> = dao.obtenerTodos()
+    /** Devuelve los ejercicios guardados localmente (Room) */
+    suspend fun obtenerLocales(): List<EjercicioDisponible> {
+        val enMemoria = cache
+        if (enMemoria != null) return enMemoria
+        val lista = dao.obtenerTodos()
+        cache = lista
+        return lista
+    }
 
+    fun limpiarCache() {
+        cache = null
+    }
     /** ➕ Crea ejercicio en Firestore y Room */
     suspend fun crearEnFirestore(ejercicio: EjercicioDisponible) {
         // Para no guardar el campo id dentro del doc, construimos un mapa sin él
@@ -62,5 +71,6 @@ class RepositorioEjercicios(private val context: Context) {
             .await()
 
         dao.insertar(ejercicio)
+        cache = (cache ?: emptyList()) + ejercicio
     }
 }

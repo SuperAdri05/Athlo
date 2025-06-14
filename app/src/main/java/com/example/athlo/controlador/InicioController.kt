@@ -2,6 +2,7 @@ package com.example.athlo.controlador
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.util.Log
 import com.example.athlo.modelo.AppDatabase
 import com.example.athlo.modelo.entreno.ResumenEntreno
 import com.example.athlo.modelo.mapa.RegistroRuta
@@ -43,37 +44,62 @@ object InicioController {
     }
 
     suspend fun obtenerCaloriasConsumidasHoy(context: Context): Int {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return 0
+        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        if (uid == null) {
+            Log.e("CALORIAS", "No hay usuario logueado, no se puede calcular calorías")
+            return 0
+        }
+
         val hoyStr = dateFormat.format(Date())
 
         return try {
             val resumenesSnap = firestore.collection("usuarios").document(uid)
                 .collection("resumenesEntrenos").get().await()
-
             val rutasSnap = firestore.collection("usuarios").document(uid)
                 .collection("registros_ruta").get().await()
 
-            val entrenos = resumenesSnap.documents
-                .mapNotNull { it.toObject(ResumenEntreno::class.java) }
-                .filter { dateFormat.format(it.fecha) == hoyStr }
+            val entrenos = resumenesSnap.documents.mapNotNull {
+                try {
+                    it.toObject(ResumenEntreno::class.java)
+                } catch (e: Exception) {
+                    Log.e("CALORIAS", "Error deserializando resumen: ${it.id} → ${e.message}")
+                    null
+                }
+            }.filter { dateFormat.format(it.fecha) == hoyStr }
 
-            val rutas = rutasSnap.documents
-                .mapNotNull { it.toObject(RegistroRuta::class.java) }
-                .filter { dateFormat.format(Date(it.fecha)) == hoyStr }
+            val rutas = rutasSnap.documents.mapNotNull {
+                try {
+                    it.toObject(RegistroRuta::class.java)
+                } catch (e: Exception) {
+                    Log.e("CALORIAS", "Error deserializando ruta: ${it.id} → ${e.message}")
+                    null
+                }
+            }.filter { dateFormat.format(Date(it.fecha)) == hoyStr }
 
             val totalEntrenos = entrenos.sumOf { it.calorias }
             val totalRutas = rutas.sumOf { it.caloriasEstimadas }
 
-            totalEntrenos + totalRutas
+            val total = totalEntrenos + totalRutas
+            context.getSharedPreferences("athlo_cache", Context.MODE_PRIVATE)
+                .edit().putInt("kcalHoy", total).apply()
+            return total
 
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e("CALORIAS", "Fallo en Firestore. Usando Room: ${e.message}", e)
             val dao = AppDatabase.obtenerInstancia(context).entrenamientoDao()
             val resumenes = dao.obtenerResumenes()
-            resumenes.filter {
+            val totalLocal = resumenes.filter {
                 dateFormat.format(Date(it.fecha)) == hoyStr
             }.sumOf { it.calorias }
+
+            Log.d("CALORIAS", "Total desde Room (offline): $totalLocal")
+            context.getSharedPreferences("athlo_cache", Context.MODE_PRIVATE)
+                .edit().putInt("kcalHoy", totalLocal).apply()
+            return totalLocal
+
         }
     }
+
 
     fun escucharMetaDiaria(
         context: Context,

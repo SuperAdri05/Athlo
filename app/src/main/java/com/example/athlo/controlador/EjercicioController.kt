@@ -24,4 +24,7 @@ object EjercicioController {
     suspend fun crearEjercicio(ejercicio: EjercicioDisponible) {
         repositorio?.crearEnFirestore(ejercicio)
     }
+    fun limpiarCache() {
+        repositorio?.limpiarCache()
+    }
 }

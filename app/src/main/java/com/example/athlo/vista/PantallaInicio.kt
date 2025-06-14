@@ -1,5 +1,7 @@
 package com.example.athlo.vista
 
+import android.content.Context
+import android.util.Log
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -28,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -54,6 +57,9 @@ import kotlinx.coroutines.withContext
 @Composable
 fun PantallaInicio(navController: NavController) {
     val context = LocalContext.current
+    val prefs = context.getSharedPreferences("athlo_cache", Context.MODE_PRIVATE)
+    var consumidasHoy by remember { mutableStateOf(prefs.getInt("kcalHoy", 0)) }
+
     val usuario = FirebaseAuth.getInstance().currentUser
     val avatarNombre = usuario?.photoUrl?.toString() ?: "avatar_gato"
 
@@ -67,11 +73,13 @@ fun PantallaInicio(navController: NavController) {
     }
 
     var metaDiaria by remember { mutableIntStateOf(2000) }
-    var consumidasHoy by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) {
+
         InicioController.escucharMetaDiaria(context) { metaDiaria = it }
+
         withContext(Dispatchers.IO) {
+            Log.d("PANTALLA_INICIO", "withcontext")
             val kcal = InicioController.obtenerCaloriasConsumidasHoy(context)
             withContext(Dispatchers.Main) {
                 consumidasHoy = kcal
@@ -80,6 +88,7 @@ fun PantallaInicio(navController: NavController) {
     }
 
     val progreso = (consumidasHoy.toFloat() / metaDiaria).coerceIn(0f, 1f)
+    Log.d("PANTALLA_INICIO", "final: progreso: $progreso")
 
     Box(
         modifier = Modifier

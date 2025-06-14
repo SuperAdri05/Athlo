@@ -14,22 +14,28 @@ import com.example.athlo.ui.theme.AthloTheme
 import com.example.athlo.vista.PantallaPrincipal
 import org.maplibre.android.MapLibre
 import org.maplibre.android.WellKnownTileServer
-
+import androidx.lifecycle.lifecycleScope
+import com.example.athlo.controlador.EjercicioController
+import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // ✅ Inicializar MapLibre (sin clave, usando servidor público)
+        // Inicializar MapLibre (sin clave, usando servidor público)
         MapLibre.getInstance(
             applicationContext,
             "",
             WellKnownTileServer.MapLibre
         )
 
-        // ✅ Pedir permisos de ubicación si no se han concedido
+        // Pedir permisos de ubicación si no se han concedido
         requestLocationPermission()
-
+        lifecycleScope.launch {
+            EjercicioController.init(applicationContext)
+            // Precargar ejercicios desde la base local para usar cache en memoria
+            EjercicioController.obtenerEjercicios()
+        }
         enableEdgeToEdge()
         setContent {
             AthloTheme {
