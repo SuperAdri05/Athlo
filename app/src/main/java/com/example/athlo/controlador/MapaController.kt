@@ -361,7 +361,7 @@ object MapaController {
                         timestamp = ts
                     )
                 } else null
-            }
+            }.sortedBy { it.timestamp }
         }
 
         return puntos
